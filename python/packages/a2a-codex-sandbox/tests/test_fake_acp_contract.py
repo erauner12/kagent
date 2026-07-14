@@ -139,6 +139,22 @@ async def test_workspace_marker_read_write_via_acp_client_methods(bridge_factory
 
 
 @pytest.mark.asyncio
+async def test_fake_e2e_marker_and_session_evidence(bridge_factory):
+    bridge = bridge_factory(context_id="context-e2e")
+    written = await collect(bridge, "operation-write", "marker-write:actor-a")
+    assert "marker:actor-a" in "".join(event.text for event in written)
+
+    read = await collect(bridge, "operation-read", "marker-read")
+    assert "marker:actor-a" in "".join(event.text for event in read)
+
+    evidence = await collect(bridge, "operation-evidence", "evidence")
+    payload = "".join(event.text for event in evidence)
+    assert '"acpSessionId": "fake-session-1"' in payload
+    assert f'"workspace": "{bridge.paths.workspace}"' in payload
+    await bridge.close()
+
+
+@pytest.mark.asyncio
 async def test_permission_and_elicitation_are_denied_visibly(bridge_factory):
     bridge = bridge_factory()
     events = await collect(bridge, "operation-1", "permission elicitation")
