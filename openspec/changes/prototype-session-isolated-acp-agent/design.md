@@ -31,17 +31,13 @@ This change depends on the Codex ACP sandbox packaging branch/commit being prese
 
 This `kagent` fork owns the first POC runtime source, image, examples/e2e fixtures, build integration, and tests. `kagent-garden` may later consume a pinned image and run local environment proof, but it is not an owner of this repository change.
 
-The design must record:
+The audit selects `python/packages/a2a-codex-sandbox/` for source, `docker/a2a-codex-sandbox/Dockerfile` plus root Make target `build-a2a-codex-sandbox` for packaging, and `ghcr.io/kagent-dev/kagent/a2a-codex-sandbox` for published images. Publish a Linux multi-architecture index for `linux/amd64` and `linux/arm64`; examples and evidence use its immutable digest and record per-platform digests. Tags are convenience only. Registry pull and architecture claims remain unproven until their later validation lanes pass.
 
-- prerequisite Codex ACP sandbox packaging branch/commit or equivalent base commit;
-- exact kagent commit or release and chart/controller image used for e2e validation;
-- Codex ACP package version and source commit inspected;
-- bridge image tag and digest;
-- registry location, pull access, required architectures, and WorkerPool pull proof.
+The prerequisite packaging commit is `f7412069030dfef2a0b5df774c32ebb41c3f1398`, present in the selected kagent base `0e27e4665f0fa55936c8fa4842b323772a870e1e`. The audited adapter is `@agentclientprotocol/codex-acp@1.1.2` at source tag `8aff492d4b033ff2c02ad3b9d591994d57617463`. Evidence must additionally record the deployed controller/chart, bridge digest, registry/WorkerPool pull result, and resolved transitive Codex version when those artifacts exist.
 
 ### Runtime image shape
 
-The POC introduces a distinct A2A-facing BYO runtime image, tentatively `a2a-codex-sandbox`. It may reuse Node base stages, the pinned Codex ACP package, and hardening choices from ACP sandbox packaging, but it must run its own A2A server and cannot rely on the `acp-sandbox-codex` entrypoint.
+The POC introduces the distinct A2A-facing BYO runtime image `a2a-codex-sandbox`. It may reuse Node base stages, the pinned Codex ACP package, and hardening choices from ACP sandbox packaging, but it must run its own A2A server and cannot rely on the `acp-sandbox-codex` entrypoint.
 
 The BYO SandboxAgent manifest must use an explicit command because the Substrate ActorTemplate path copies command and args directly. The runtime must listen on port 80 and expose the agent card readiness endpoint expected by the current SandboxAgent translation path. Initial readiness means the A2A server is listening, the bridge state directory is usable, and the child executable is present; it does not require valid OpenAI credentials, successful provider authentication, a model call, or a persistent running `codex-acp` child. This matters because the current SandboxAgent readiness path probes `/.well-known/agent-card.json` on port 80 during ActorTemplate/golden snapshot creation and resume; provider-dependent readiness would make model-independent snapshots fail when credentials are intentionally absent.
 
@@ -57,9 +53,7 @@ A2A server / bridge → codex-acp stdin/stdout
 
 ### Bridge implementation language
 
-Language remains the first bounded spike, but it must follow kagent repository conventions. Python is the default fit for an experimental agent/BYO runtime. Go is the default fit if the implementation is intended to migrate into controller-owned kagent core. TypeScript should be used only with a concrete maintainer-accepted exception, even though the child `codex-acp` process is Node-based.
-
-The decision must compare A2A server support, ACP client support, child-process supervision, streaming and cancellation, fake-child testability, existing kagent package boundaries, and likely reuse path.
+The bridge SHALL be implemented in Python. Both Python and Go have supported A2A server paths and require a similarly thin ACP NDJSON client; both can supervise a fake or real child with streaming and cancellation. Python wins because this is an experimental BYO/agent runtime under the repository's Python ownership boundary. Go remains appropriate only for a later controller-owned integration. TypeScript is rejected: the Node-based child does not require the bridge to share its language, and no repository-guidance exception is justified.
 
 ### Persistence and restart model
 
@@ -90,7 +84,11 @@ Continuity claims are separate:
 - bridge continuity: context/session/thread mappings can be reconstructed;
 - coding-agent continuity: Codex thread/history can actually be resumed.
 
-If pinned `codex-acp` cannot reload the prior thread after restart, the POC may still pass workspace continuity but must not claim conversational continuity. If `session/load` fails with a not-found or stale-session-shaped error, the bridge should fall back to `session/new`, invalidate the stale load candidate, record the fallback in evidence, and scope any resulting claim to workspace/bridge continuity rather than conversational continuity.
+If pinned `codex-acp` cannot reload the prior thread after restart, the POC may still pass workspace continuity but must not claim conversational continuity. The selected adapter is 1.1.2: its ACP session ID is the Codex thread ID, `session/load` and `session/resume` call `thread/resume`, and load replays stored history as `session/update` notifications. It does not expose the rollout JSONL path, so that diagnostic is recorded as unavailable rather than inferred.
+
+The adapter propagates the Codex App Server load error rather than normalizing a stable not-found type. For the pinned contract, fallback is limited to JSON-RPC code `-32600` with a message containing `thread not found: <id>` (or a later explicitly fixture-backed equivalent). Authentication, transport, and arbitrary load failures do not trigger fallback. On a matched stale load, create a new session, invalidate the candidate, record the fallback, and scope the claim to workspace/bridge continuity.
+
+The adapter's in-memory ACP state does not survive restart. Start every child with `CODEX_HOME=/data/codex`, reinitialize, then load by persisted thread ID. Adapter 1.1.2 is retained for PR 2 unless a separately reviewed upgrade is required. Because its published dependency on `@openai/codex` is a range, packaging must also make the resolved Codex version reproducible; pinning only the adapter is insufficient.
 
 ### Session and operation mapping
 
@@ -123,7 +121,7 @@ The bridge should emit redacted diagnostics for outbound/inbound ACP JSON-RPC en
 
 Parent-Agent delegation is not just final acceptance. Repo research shows the current runtimes do not naturally provide the desired mapping of one parent conversation to one child coding session. The Go parent Agent path constructs the remote A2A tool once per parent pod/process and reuses one generated child context across conversations and users until restart. The Python parent Agent path rebuilds runner/tool objects per request, so repeated turns of one parent conversation receive fresh child contexts and therefore fresh actors.
 
-Both runtimes propagate lineage headers such as `x-kagent-parent-context-id` and `x-kagent-root-context-id`, but the current substrate actor routing uses the body A2A `contextId`, not those headers. Before claiming parent-Agent continuity, the implementation must choose and validate an explicit correlation mechanism: for example, derive the child body `contextId` deterministically from the parent/root context at the caller, or add controller-side correlation in a later core change. The implementation audit should still confirm the observed per-runtime behavior against the exact selected build.
+Both runtimes propagate lineage headers such as `x-kagent-parent-context-id` and `x-kagent-root-context-id`, but the current substrate actor routing uses the body A2A `contextId`, not those headers. The selected mechanism is caller-side deterministic derivation of child body `contextId` from the root context ID plus remote SandboxAgent namespace/name, using a namespaced hash/UUID valid as an A2A ID. Missing root falls back to the immediate parent context; raw correlation inputs are not logged. Both Go and Python parent tools must use this derivation before parent-delegation acceptance. The bridge cannot repair this mapping because substrate routing occurs before bridge execution.
 
 ### Permission policy
 
@@ -150,7 +148,5 @@ Note the parent-side chain already exists: both ADK remote A2A tools propagate a
 
 ## Open Questions
 
-- Which bridge language should be used for this repo-owned POC: Python for agent-runtime fit, Go for later kagent-core migration fit, or TypeScript only with an explicit exception?
-- Which explicit correlation mechanism should map a parent Agent conversation/root context to a child SandboxAgent body `contextId` for delegation continuity?
-- Should platform control-plane methods such as `tasks/resubscribe`, `tasks/get`, and `tasks/cancel` be made routable in a later kagent core change, or should this POC rely only on disconnect-as-cancel and fresh task results?
+- Should a later kagent core change make task-id-only control methods routable, after this POC proves the disconnect-as-cancel baseline?
 - Which strategy should a later POC adopt for mapping mid-turn ACP permission requests onto A2A input-required given the suspend-vs-blocked-turn mismatch: re-prompt with stored decisions, holding the stream open, or controller-side suspension deferral?
