@@ -23,11 +23,11 @@
 
 ## 3. Add image packaging examples and CI coverage
 
-- [ ] 3.1 Add the `a2a-codex-sandbox` Docker target or image build path with pinned runtime dependencies and no baked credentials.
-- [ ] 3.2 Add the BYO SandboxAgent example or e2e fixture using the digest-pinned `a2a-codex-sandbox` image and an explicit command.
-- [ ] 3.3 Add the parent declarative coordinator Agent example or e2e fixture that references the BYO SandboxAgent as an Agent tool.
-- [ ] 3.4 Add Makefile and CI image-build coverage appropriate for the selected packaging path.
-- [ ] 3.5 Ensure runtime Secret references pass `OPENAI_API_KEY` or `CODEX_API_KEY` plus `NO_BROWSER=1` only at runtime and never through image layers or build arguments.
+- [x] 3.1 Add the `a2a-codex-sandbox` Docker target or image build path with pinned runtime dependencies and no baked credentials.
+- [x] 3.2 Add the BYO SandboxAgent example or e2e fixture using the digest-pinned `a2a-codex-sandbox` image and an explicit command.
+- [x] 3.3 Add the parent declarative coordinator Agent example or e2e fixture that references the BYO SandboxAgent as an Agent tool.
+- [x] 3.4 Add Makefile and CI image-build coverage appropriate for the selected packaging path.
+- [x] 3.5 Ensure runtime Secret references pass `OPENAI_API_KEY` or `CODEX_API_KEY` plus `NO_BROWSER=1` only at runtime and never through image layers or build arguments.
 
 ## 4. Validate bridge behavior and isolation
 

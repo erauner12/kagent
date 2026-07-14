@@ -367,6 +367,7 @@ jobs:
           - acp-sandbox-openclaw
           - acp-sandbox-claude
           - acp-sandbox-codex
+          - a2a-codex-sandbox
     runs-on: ubuntu-latest
     services:
       registry:
