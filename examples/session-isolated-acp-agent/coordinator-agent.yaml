@@ -1,0 +1,18 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: codex-coordinator
+  namespace: kagent
+spec:
+  type: Declarative
+  description: Coordinator fixture for later Codex SandboxAgent delegation acceptance
+  declarative:
+    runtime: go
+    modelConfig: default-model-config
+    systemMessage: Delegate coding tasks to the a2a-codex-sandbox specialist.
+    tools:
+      - type: Agent
+        agent:
+          kind: SandboxAgent
+          apiGroup: kagent.dev
+          name: a2a-codex-sandbox

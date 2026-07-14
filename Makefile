@@ -61,6 +61,7 @@ ACP_SANDBOX_HERMES_IMAGE_NAME ?= acp-sandbox-hermes
 ACP_SANDBOX_OPENCLAW_IMAGE_NAME ?= acp-sandbox-openclaw
 ACP_SANDBOX_CLAUDE_IMAGE_NAME ?= acp-sandbox-claude
 ACP_SANDBOX_CODEX_IMAGE_NAME ?= acp-sandbox-codex
+A2A_CODEX_SANDBOX_IMAGE_NAME ?= a2a-codex-sandbox
 
 CONTROLLER_IMAGE_TAG ?= $(VERSION)
 UI_IMAGE_TAG ?= $(VERSION)
@@ -72,6 +73,7 @@ GOLANG_ADK_IMAGE_TAG ?= $(VERSION)
 GOLANG_ADK_FULL_IMAGE_TAG ?= $(VERSION)-full
 SKILLS_INIT_IMAGE_TAG ?= $(VERSION)
 ACP_SANDBOX_IMAGE_TAG ?= $(VERSION)
+A2A_CODEX_SANDBOX_IMAGE_TAG ?= $(VERSION)
 CONTROLLER_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(CONTROLLER_IMAGE_NAME):$(CONTROLLER_IMAGE_TAG)
 UI_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(UI_IMAGE_NAME):$(UI_IMAGE_TAG)
 APP_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(APP_IMAGE_NAME):$(APP_IMAGE_TAG)
@@ -86,6 +88,7 @@ ACP_SANDBOX_HERMES_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(ACP_SANDBOX_HERMES
 ACP_SANDBOX_OPENCLAW_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(ACP_SANDBOX_OPENCLAW_IMAGE_NAME):$(ACP_SANDBOX_IMAGE_TAG)
 ACP_SANDBOX_CLAUDE_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(ACP_SANDBOX_CLAUDE_IMAGE_NAME):$(ACP_SANDBOX_IMAGE_TAG)
 ACP_SANDBOX_CODEX_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(ACP_SANDBOX_CODEX_IMAGE_NAME):$(ACP_SANDBOX_IMAGE_TAG)
+A2A_CODEX_SANDBOX_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(A2A_CODEX_SANDBOX_IMAGE_NAME):$(A2A_CODEX_SANDBOX_IMAGE_TAG)
 
 #take from go/go.mod
 AWK ?= $(shell command -v gawk || command -v awk)
@@ -263,6 +266,7 @@ build-img-versions: ## Print the fully-qualified image tags for all components
 	@echo acp-sandbox-openclaw=$(ACP_SANDBOX_OPENCLAW_IMG)
 	@echo acp-sandbox-claude=$(ACP_SANDBOX_CLAUDE_IMG)
 	@echo acp-sandbox-codex=$(ACP_SANDBOX_CODEX_IMG)
+	@echo a2a-codex-sandbox=$(A2A_CODEX_SANDBOX_IMG)
 
 .PHONY: controller-manifests
 controller-manifests: ## Regenerate CRD manifests and copy them into the Helm chart
@@ -368,6 +372,12 @@ build-acp-sandbox-codex: ## Build and push the ACP sandbox Codex image
 build-acp-sandbox-codex: buildx-create
 	$(DOCKER_BUILDER) $(DOCKER_BUILD_ARGS) $(TOOLS_IMAGE_BUILD_ARGS) --target codex -t $(ACP_SANDBOX_CODEX_IMG) -f docker/acp-sandbox/Dockerfile ./go
 	$(DOCKER_PUSH) $(ACP_SANDBOX_CODEX_IMG)
+
+.PHONY: build-a2a-codex-sandbox
+build-a2a-codex-sandbox: ## Build and push the session-isolated A2A Codex sandbox image
+build-a2a-codex-sandbox: buildx-create
+	$(DOCKER_BUILDER) $(DOCKER_BUILD_ARGS) $(TOOLS_IMAGE_BUILD_ARGS) -t $(A2A_CODEX_SANDBOX_IMG) -f docker/a2a-codex-sandbox/Dockerfile ./python
+	$(DOCKER_PUSH) $(A2A_CODEX_SANDBOX_IMG)
 
 .PHONY: push
 push: ## Push all component images (controller, ui, app, ADKs)

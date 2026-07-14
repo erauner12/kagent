@@ -1,0 +1,30 @@
+apiVersion: kagent.dev/v1alpha2
+kind: SandboxAgent
+metadata:
+  name: a2a-codex-sandbox
+  namespace: kagent
+spec:
+  type: BYO
+  description: Session-isolated Codex ACP coding specialist
+  byo:
+    deployment:
+      # Replace the sentinel with the published multi-architecture index digest.
+      image: ghcr.io/kagent-dev/kagent/a2a-codex-sandbox@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      cmd: /opt/a2a-codex-sandbox/bin/a2a-codex-sandbox
+      env:
+        - name: CODEX_HOME
+          value: /data/codex
+        - name: NO_BROWSER
+          value: "1"
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: a2a-codex-sandbox-credentials
+              key: OPENAI_API_KEY
+  sandbox:
+    network:
+      allowedDomains:
+        - api.openai.com
+  substrate:
+    workerPoolRef:
+      name: kagent-default
