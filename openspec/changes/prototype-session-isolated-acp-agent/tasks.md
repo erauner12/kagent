@@ -1,12 +1,12 @@
 ## 1. Resolve prerequisites and runtime ownership
 
-- [ ] 1.1 Confirm the branch stack includes the Codex ACP sandbox packaging branch/commit, or add that packaging as prerequisite work before this change.
-- [ ] 1.2 Verify the selected kagent controller/chart build supports BYO SandboxAgents with explicit commands, record the expected missing-`contextId` failure before bridge execution, and audit routability of `tasks/resubscribe`, `tasks/get`, and `tasks/cancel` through the substrate session transport.
-- [ ] 1.3 Confirm the pinned A2A method surface: direct SandboxAgent chat uses `message/stream`, parent Agent-tool delegation uses non-streaming `message/send`, and task-id-only control-plane methods are platform limitations unless later core routing changes are made.
-- [ ] 1.4 Using an existing SandboxAgent or trivial echo BYO fixture, record child body `contextId` and lineage headers for Go and Python parent Agent paths across same-turn and cross-turn tool calls; choose the correlation mechanism needed for one parent conversation to map to one child coding session.
-- [ ] 1.5 Run a bounded bridge-language spike comparing Python and Go, with TypeScript allowed only if a concrete exception is justified and accepted.
-- [ ] 1.6 Choose the fork-owned bridge source location, runtime image name, Docker/build path, registry, architecture support, and digest pinning policy for `a2a-codex-sandbox`.
-- [ ] 1.7 Verify pinned `codex-acp` version/source behavior for direct stdio, authentication, session creation/loading/resume via thread ID, load-not-found fallback shape, load replay updates, disconnect cancellation settlement, permission request shapes, Codex rollout path availability, and durable `CODEX_HOME` restart support.
+- [x] 1.1 Confirm the branch stack includes the Codex ACP sandbox packaging branch/commit, or add that packaging as prerequisite work before this change.
+- [x] 1.2 Verify the selected kagent controller/chart build supports BYO SandboxAgents with explicit commands, record the expected missing-`contextId` failure before bridge execution, and audit routability of `tasks/resubscribe`, `tasks/get`, and `tasks/cancel` through the substrate session transport.
+- [x] 1.3 Confirm the pinned A2A method surface: direct SandboxAgent chat uses `message/stream`, parent Agent-tool delegation uses non-streaming `message/send`, and task-id-only control-plane methods are platform limitations unless later core routing changes are made.
+- [x] 1.4 Using an existing SandboxAgent or trivial echo BYO fixture, record child body `contextId` and lineage headers for Go and Python parent Agent paths across same-turn and cross-turn tool calls; choose the correlation mechanism needed for one parent conversation to map to one child coding session.
+- [x] 1.5 Run a bounded bridge-language spike comparing Python and Go, with TypeScript allowed only if a concrete exception is justified and accepted.
+- [x] 1.6 Choose the fork-owned bridge source location, runtime image name, Docker/build path, registry, architecture support, and digest pinning policy for `a2a-codex-sandbox`.
+- [x] 1.7 Verify pinned `codex-acp` version/source behavior for direct stdio, authentication, session creation/loading/resume via thread ID, load-not-found fallback shape, load replay updates, disconnect cancellation settlement, permission request shapes, Codex rollout path availability, and durable `CODEX_HOME` restart support.
 
 ## 2. Build the minimal A2A-to-ACP runtime
 
