@@ -153,6 +153,21 @@ def main() -> None:
                     {"sessionId": session_id, "path": marker},
                 )
                 update(session_id, result.get("content", ""))
+            if text.startswith("marker-write:"):
+                marker_value = text.removeprefix("marker-write:")
+                (Path.cwd() / "marker.txt").write_text(marker_value, encoding="utf-8")
+                update(session_id, f"marker:{marker_value}")
+            if text == "marker-read":
+                marker_value = (Path.cwd() / "marker.txt").read_text(encoding="utf-8")
+                update(session_id, f"marker:{marker_value}")
+            if text == "evidence":
+                update(
+                    session_id,
+                    json.dumps(
+                        {"acpSessionId": session_id, "workspace": str(Path.cwd())},
+                        sort_keys=True,
+                    ),
+                )
             update(session_id, "hello ")
             update(session_id, "world")
             if "hang_prompt" in SCENARIO or "cancel" in text:

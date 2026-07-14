@@ -391,6 +391,16 @@ lint: ## Run linters for Go and Python
 	make -C go lint
 	make -C python lint
 
+.PHONY: kind-e2e-session-isolated-acp-fake
+kind-e2e-session-isolated-acp-fake: ## Run the fake ACP SandboxAgent lifecycle lane on a prepared Kind/Substrate cluster
+	KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) \
+	CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) \
+	A2A_CODEX_SANDBOX_FAKE_IMAGE=$(A2A_CODEX_SANDBOX_IMG) \
+	EVIDENCE_FILE=$(FAKE_ACP_KIND_EVIDENCE) \
+	./scripts/kind-e2e-session-isolated-acp-fake.sh
+
+FAKE_ACP_KIND_EVIDENCE ?= /tmp/session-isolated-acp-fake-kind-evidence.md
+
 .PHONY: push-test-agent
 push-test-agent: buildx-create build-kagent-adk build-kagent-adk-full ## Build and push E2E test agent images to the local registry
 	echo "Building FROM DOCKER_REGISTRY=$(DOCKER_REGISTRY)/$(DOCKER_REPO)/kagent-adk:$(VERSION)-full"

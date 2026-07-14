@@ -22,11 +22,18 @@ import (
 
 // substrateSandboxSessionRoundTripper routes each A2A request to the session actor identified by contextId.
 type substrateSandboxSessionRoundTripper struct {
-	routerURL    string
-	sandboxAgent *v1alpha2.SandboxAgent
-	actorBackend *substrate.SandboxAgentActorBackend
-	base         http.RoundTripper
-	db           database.Client
+	routerURL      string
+	sandboxAgent   *v1alpha2.SandboxAgent
+	actorBackend   *substrate.SandboxAgentActorBackend
+	base           http.RoundTripper
+	db             database.Client
+	sessionLocksMu sync.Mutex
+	sessionLocks   map[string]*sessionRoundTripLock
+}
+
+type sessionRoundTripLock struct {
+	mu   sync.Mutex
+	refs int
 }
 
 func newSubstrateSandboxSessionRoundTripper(
@@ -52,6 +59,7 @@ func newSubstrateSandboxSessionRoundTripper(
 		actorBackend: actorBackend,
 		base:         base,
 		db:           db,
+		sessionLocks: make(map[string]*sessionRoundTripLock),
 	}, nil
 }
 
@@ -73,6 +81,8 @@ func (t *substrateSandboxSessionRoundTripper) RoundTrip(req *http.Request) (*htt
 		return nil, fmt.Errorf("message contextId (session id) is required for substrate sandbox agents")
 	}
 
+	unlockSession := t.lockSession(sessionID)
+
 	// non blocking attempt to ensure that sandbox agent session metadata is persisted to postgres
 	// to support session list and delete cleanup.
 	if err := t.ensureSessionRow(req.Context(), sessionID, req.Header.Get("X-User-Id")); err != nil {
@@ -82,6 +92,7 @@ func (t *substrateSandboxSessionRoundTripper) RoundTrip(req *http.Request) (*htt
 
 	res, err := t.actorBackend.EnsureSessionActor(req.Context(), t.sandboxAgent, sessionID)
 	if err != nil {
+		unlockSession()
 		return nil, err
 	}
 
@@ -89,12 +100,14 @@ func (t *substrateSandboxSessionRoundTripper) RoundTrip(req *http.Request) (*htt
 	// selects the actor by HTTP Host; actor ID comes from EnsureSessionActor above.
 	actorRT, err := newSubstrateAgentRoundTripper(t.routerURL, res.Handle.Atespace, res.Handle.ID, t.base)
 	if err != nil {
+		unlockSession()
 		return nil, err
 	}
 
 	resp, err := actorRT.RoundTrip(req)
 	if err != nil {
-		t.scheduleSuspendSession(sessionID)
+		t.suspendSession(sessionID)
+		unlockSession()
 		return nil, err
 	}
 
@@ -103,7 +116,8 @@ func (t *substrateSandboxSessionRoundTripper) RoundTrip(req *http.Request) (*htt
 	resp.Body = &suspendSessionActorOnClose{
 		ReadCloser: resp.Body,
 		suspend: func() {
-			t.scheduleSuspendSession(sessionID)
+			t.suspendSession(sessionID)
+			unlockSession()
 		},
 	}
 	return resp, nil
@@ -133,15 +147,38 @@ func (t *substrateSandboxSessionRoundTripper) ensureSessionRow(ctx context.Conte
 	return nil
 }
 
-func (t *substrateSandboxSessionRoundTripper) scheduleSuspendSession(sessionID string) {
+func (t *substrateSandboxSessionRoundTripper) lockSession(sessionID string) func() {
+	t.sessionLocksMu.Lock()
+	if t.sessionLocks == nil {
+		t.sessionLocks = make(map[string]*sessionRoundTripLock)
+	}
+	lock := t.sessionLocks[sessionID]
+	if lock == nil {
+		lock = &sessionRoundTripLock{}
+		t.sessionLocks[sessionID] = lock
+	}
+	lock.refs++
+	t.sessionLocksMu.Unlock()
+
+	lock.mu.Lock()
+	return func() {
+		lock.mu.Unlock()
+		t.sessionLocksMu.Lock()
+		lock.refs--
+		if lock.refs == 0 {
+			delete(t.sessionLocks, sessionID)
+		}
+		t.sessionLocksMu.Unlock()
+	}
+}
+
+func (t *substrateSandboxSessionRoundTripper) suspendSession(sessionID string) {
 	if t == nil || t.actorBackend == nil || t.sandboxAgent == nil {
 		return
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		_ = t.actorBackend.SuspendSessionActor(ctx, t.sandboxAgent, sessionID)
-	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_ = t.actorBackend.SuspendSessionActor(ctx, t.sandboxAgent, sessionID)
 }
 
 type suspendSessionActorOnClose struct {

@@ -1,0 +1,28 @@
+apiVersion: kagent.dev/v1alpha2
+kind: SandboxAgent
+metadata:
+  name: a2a-codex-sandbox-fake
+  namespace: kagent
+spec:
+  type: BYO
+  description: Model-independent fake ACP Kind e2e fixture
+  byo:
+    deployment:
+      image: A2A_CODEX_SANDBOX_IMAGE_REF
+      cmd: /opt/a2a-codex-sandbox/bin/a2a-codex-sandbox
+      env:
+        - name: ACP_CHILD_COMMAND
+          value: /opt/a2a-codex-sandbox/bin/fake-acp-child
+        - name: ACP_REQUIRE_CREDENTIALS
+          value: "false"
+        - name: FAKE_ACP_SCENARIO
+          value: normal
+        - name: FAKE_ACP_TRACE
+          value: /data/bridge/fake-trace.jsonl
+        - name: CODEX_HOME
+          value: /data/codex
+        - name: NO_BROWSER
+          value: "1"
+  substrate:
+    workerPoolRef:
+      name: kagent-default

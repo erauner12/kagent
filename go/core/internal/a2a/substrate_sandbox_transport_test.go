@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/kagent-dev/kagent/go/api/database"
@@ -42,6 +43,32 @@ func TestSuspendSessionActorOnClose(t *testing.T) {
 	}
 	if body.closed != 1 {
 		t.Fatalf("expected underlying body closed once, got %d", body.closed)
+	}
+}
+
+func TestSessionRoundTripLockSerializesSameSession(t *testing.T) {
+	t.Parallel()
+
+	rt := &substrateSandboxSessionRoundTripper{}
+	unlockFirst := rt.lockSession("session-a")
+	acquired := make(chan func(), 1)
+	go func() {
+		acquired <- rt.lockSession("session-a")
+	}()
+
+	select {
+	case unlockSecond := <-acquired:
+		unlockSecond()
+		t.Fatal("second request acquired the same session before the first completed")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	unlockFirst()
+	select {
+	case unlockSecond := <-acquired:
+		unlockSecond()
+	case <-time.After(time.Second):
+		t.Fatal("second request did not acquire the session after the first completed")
 	}
 }
 
