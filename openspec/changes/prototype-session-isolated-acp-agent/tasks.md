@@ -6,16 +6,16 @@
 - [ ] 1.4 Using an existing SandboxAgent or trivial echo BYO fixture, record child body `contextId` and lineage headers for Go and Python parent Agent paths across same-turn and cross-turn tool calls; choose the correlation mechanism needed for one parent conversation to map to one child coding session.
 - [ ] 1.5 Run a bounded bridge-language spike comparing Python and Go, with TypeScript allowed only if a concrete exception is justified and accepted.
 - [ ] 1.6 Choose the fork-owned bridge source location, runtime image name, Docker/build path, registry, architecture support, and digest pinning policy for `a2a-codex-sandbox`.
-- [ ] 1.7 Verify pinned `codex-acp` version/source behavior for direct stdio, authentication, session creation/loading/resume via thread ID, disconnect cancellation, permission request shapes, and durable `CODEX_HOME` restart support.
+- [ ] 1.7 Verify pinned `codex-acp` version/source behavior for direct stdio, authentication, session creation/loading/resume via thread ID, load-not-found fallback shape, load replay updates, disconnect cancellation settlement, permission request shapes, Codex rollout path availability, and durable `CODEX_HOME` restart support.
 
 ## 2. Build the minimal A2A-to-ACP runtime
 
 - [ ] 2.1 Create the fork-owned BYO runtime source under the selected Python or Go ownership path with an A2A server on port 80 and `/.well-known/agent-card.json` readiness that does not require provider credentials or model availability.
 - [ ] 2.2 Implement direct stdio supervision for the configurable ACP child, using `codex-acp` for the real lane and a fake ACP child for deterministic tests.
-- [ ] 2.3 Implement the one-context-one-actor-one-workspace-one-logical-coding-session mapping and persist current/prior ACP and Codex backend identifiers plus per-operation terminal records under `/data` before prompt execution.
+- [ ] 2.3 Implement the one-context-one-actor-one-workspace-one-logical-coding-session mapping and persist current/prior ACP and Codex backend identifiers, session-ID confidence, Codex rollout path when available, and per-operation terminal records under `/data` before prompt execution.
 - [ ] 2.4 Configure durable paths for `/data/workspace`, bridge session metadata, operation records, and Codex state such as `CODEX_HOME` when supported.
-- [ ] 2.5 Keep the outer A2A response open until the ACP turn reaches a terminal stop reason, then emit exactly one terminal A2A result and close.
-- [ ] 2.6 Implement terminal busy/rejected A2A task results, duplicate task/message idempotence, disconnect-as-cancel handling, child crash handling, and safe active-operation cleanup with exactly one terminal outcome across completion, disconnect, timeout, and crash races.
+- [ ] 2.5 Keep the outer A2A response open until the ACP `session/prompt` response reaches a terminal stop reason, then emit exactly one terminal A2A result and close without inferring terminal state from intermediate updates.
+- [ ] 2.6 Implement terminal busy/rejected A2A task results, duplicate task/message idempotence, disconnect-as-cancel handling, child crash handling, generation-counted teardown, and safe active-operation cleanup with exactly one terminal outcome across completion, disconnect, timeout, stale teardown, and crash races.
 - [ ] 2.7 Implement the first POC permission policy: deny ACP permission requests explicitly, emit visible A2A output, and never wait indefinitely for human input.
 
 ## 3. Add image packaging examples and CI coverage
@@ -28,12 +28,12 @@
 
 ## 4. Validate bridge behavior and isolation
 
-- [ ] 4.1 Add model-independent fake-ACP tests for initialize, session/new, optional session/load, prompt streaming, cancellation, controlled failure, and workspace marker read/write.
-- [ ] 4.2 Add focused Python or Go unit/contract tests for identity mapping, session sequencing, terminal result uniqueness, busy rejection, disconnect/cancel races, duplicate prompt idempotence, child clean/fail exit, missing credentials, and failed initialization.
+- [ ] 4.1 Add model-independent fake-ACP tests for initialize, session/new, session/load success, session/load not-found fallback, load replay suppression, prompt streaming, cancellation settlement, controlled failure, diagnostics, and workspace marker read/write.
+- [ ] 4.2 Add focused Python or Go unit/contract tests for identity mapping, session sequencing, terminal result uniqueness, busy rejection, disconnect/cancel races, duplicate prompt idempotence, child clean/fail exit, stale generation teardown, bootstrap/control-plane timeouts, missing credentials, and failed initialization.
 - [ ] 4.3 Add or extend kagent e2e coverage for the fake ACP runtime lane with two A2A contexts, distinct actors, isolated `/data/workspace` markers, immediate back-to-back turns to expose suspend races, suspend/resume, disconnect-as-cancel, session deletion, peer non-interference, and cleanup.
 - [ ] 4.4 Add credentialed Codex ACP smoke coverage for runtime-only initialize/authentication, one bounded model turn, permission-deny behavior if triggered, and observed conversational-continuity limits after restart.
 - [ ] 4.5 Add parent-Agent delegation coverage after direct SandboxAgent proof passes.
-- [ ] 4.6 Capture redacted evidence with prerequisite Codex packaging commit, versions, image digests per actor, ActorTemplate/image-shape pinning behavior, registry/WorkerPool pull result, safe context/actor/session/turn correlation, proof classification, and cleanup status.
+- [ ] 4.6 Capture redacted evidence with prerequisite Codex packaging commit, versions, image digests per actor, ActorTemplate/image-shape pinning behavior, registry/WorkerPool pull result, safe context/actor/session/turn correlation, session-ID confidence/fallback state, diagnostics summary, proof classification, and cleanup status.
 
 ## 5. Update kagent-native docs
 
