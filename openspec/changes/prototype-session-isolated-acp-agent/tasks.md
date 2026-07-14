@@ -11,14 +11,14 @@
 ## 2. Build the minimal A2A-to-ACP runtime
 
 - [x] 2.1a Create the fork-owned Python package foundation under the selected runtime source path.
-- [ ] 2.1b Add the A2A server on port 80 and `/.well-known/agent-card.json` readiness that does not require provider credentials or model availability.
+- [x] 2.1b Add the A2A server on port 80 and `/.well-known/agent-card.json` readiness that does not require provider credentials or model availability.
 - [x] 2.2 Implement direct stdio supervision for the configurable ACP child, using `codex-acp` for the real lane and a fake ACP child for deterministic tests.
 - [x] 2.3 Implement the one-context-one-actor-one-workspace-one-logical-coding-session mapping and persist current/prior ACP and Codex backend identifiers, session-ID confidence, Codex rollout path when available, and per-operation terminal records under `/data` before prompt execution.
 - [x] 2.4 Configure durable paths for `/data/workspace`, bridge session metadata, operation records, and Codex state such as `CODEX_HOME` when supported.
 - [x] 2.5a Keep the bridge operation open until the ACP `session/prompt` response reaches a terminal stop reason, without inferring terminal state from intermediate updates.
-- [ ] 2.5b Keep the outer A2A response open for that bridge operation, emit exactly one terminal A2A result, and close.
+- [x] 2.5b Keep the outer A2A response open for that bridge operation, emit exactly one terminal A2A result, and close.
 - [x] 2.6a Implement core busy/rejected terminal events, duplicate task/message idempotence, iterator-close-as-cancel handling, child crash handling, generation-counted teardown, and safe active-operation cleanup with exactly one terminal outcome across completion, disconnect, timeout, stale teardown, and crash races.
-- [ ] 2.6b Map core terminal events to A2A task results and wire HTTP response disconnect to bridge cancellation.
+- [x] 2.6b Map core terminal events to A2A task results and wire HTTP response disconnect to bridge cancellation.
 - [x] 2.7 Implement the first POC permission policy: deny ACP permission requests explicitly, emit a visible bridge output event, and never wait indefinitely for human input.
 
 ## 3. Add image packaging examples and CI coverage
