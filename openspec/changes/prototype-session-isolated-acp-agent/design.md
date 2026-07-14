@@ -129,6 +129,18 @@ Both runtimes propagate lineage headers such as `x-kagent-parent-context-id` and
 
 The first POC denies ACP permission requests explicitly, emits visible A2A output, and continues or terminates according to the backend response. The bridge must implement ACP client-side handlers for the permission shapes emitted by pinned `codex-acp`—including command execution, file changes, permission-profile requests, and MCP elicitation if observed—and select the appropriate deny/cancel response for each. Full mapping to A2A input-required/HITL is deferred; Codex approval policy should be configured to minimize permission prompts where safe.
 
+#### Why HITL mapping is deferred: the suspend-vs-blocked-turn mismatch
+
+Deferral is not just scope trimming; there is a structural mismatch this POC should record rather than rediscover later. ACP `session/request_permission` is synchronous inside an active prompt: `codex-acp` blocks mid-turn until the client answers. Kagent's A2A HITL contract is a pause across turns: the child returns a terminal `input-required` response, the outer response closes, and the decision arrives later as a new message. On substrate those two contracts collide, because the session transport suspends the actor when the response body closes. Emitting `input-required` and closing would data-only suspend the actor, cold-kill the bridge and the `codex-acp` child, and destroy the Codex turn that is blocked waiting for the answer. Codex rollout persistence restores thread history on `session/load`, not a turn frozen mid-permission, so the pending request cannot be reconstructed on resume. This is exactly the property that lets kagent's own ADK agents survive HITL across suspend—the ADK persists the paused invocation in its durable session store—and Codex has no equivalent mid-turn durability.
+
+Candidate strategies for a later POC, none selected here:
+
+- Re-prompt on resume: persist the permission request and the user's decision, replay the turn after cold boot, and auto-answer the re-occurring request from the stored decision. Fragile—the replayed turn may not ask the same question, and approving a side-effecting action against a re-rolled turn has idempotency risk.
+- Hold the A2A stream open across the approval: keeps the actor and child alive but violates the kagent HITL turn contract and pins a WorkerPool worker for human-scale wait times.
+- Defer suspension while an approval is pending: a controller-side change to the substrate session transport, out of scope for this fork-local POC but a legitimate later core proposal alongside control-plane routability.
+
+Note the parent-side chain already exists: both ADK remote A2A tools propagate a child's `input-required` up through `request_confirmation()` and forward the decision back down by task/context ID. Coordinator-level, between-turn gates (approve before delegating, approve before proceeding) therefore map cleanly onto existing kagent HITL machinery today, because the pause lands where suspend is already safe. The hard case is specifically the per-tool-call, mid-Codex-turn approval, which is what deny-all punts on.
+
 ## Risks / Trade-offs
 
 - Direct stdio is simpler but diverges from the controller-side ACP gateway topology described in `design/EP-XXXX-acp-integration.md`. This is intentional for the actor-local POC.
@@ -141,3 +153,4 @@ The first POC denies ACP permission requests explicitly, emits visible A2A outpu
 - Which bridge language should be used for this repo-owned POC: Python for agent-runtime fit, Go for later kagent-core migration fit, or TypeScript only with an explicit exception?
 - Which explicit correlation mechanism should map a parent Agent conversation/root context to a child SandboxAgent body `contextId` for delegation continuity?
 - Should platform control-plane methods such as `tasks/resubscribe`, `tasks/get`, and `tasks/cancel` be made routable in a later kagent core change, or should this POC rely only on disconnect-as-cancel and fresh task results?
+- Which strategy should a later POC adopt for mapping mid-turn ACP permission requests onto A2A input-required given the suspend-vs-blocked-turn mismatch: re-prompt with stored decisions, holding the stream open, or controller-side suspension deferral?
