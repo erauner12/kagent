@@ -38,6 +38,6 @@ The earlier `kagent-garden` planning document remains an external planning refer
 
 ## Intentionally Unchanged Surfaces
 
-- No kagent-garden Garden commands, operator matrix, operator-surface index, or rendered truth.
+- No kagent-garden Garden commands, operator matrix, operator-surface index, or rendered fixtures/manifests.
 - No tool-specific committed mirrors under `.claude`, `.cursor`, `.codex`, or similar paths.
 - No upstream kagent public proposal process change unless maintainers request it.

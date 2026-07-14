@@ -22,13 +22,13 @@ The proof is split into two lanes:
 - Verify examples/e2e fixtures reference the fork-owned A2A-facing runtime image, not `acp-sandbox-codex` directly.
 - Verify runtime readiness is provider-independent: A2A server listening, bridge state directory usable, and child executable present.
 - Verify no source, examples, or tests deploy `acp-sandbox-codex` directly as the BYO SandboxAgent workload.
-- Verify no credentials, full environment dumps, or sensitive prompt/workspace contents appear in checked-in files, rendered truth, logs, or evidence.
+- Verify no credentials, full environment dumps, or sensitive prompt/workspace contents appear in checked-in files, rendered fixtures/manifests, logs, or evidence.
 
 ## Runtime / Proof Checks
 
 ### Fake ACP lane: one-button / no-human
 
-Run the bridge against a fake ACP stdio child that deterministically supports initialize, session/new, optional session/load, session/prompt, streamed text/tool-like updates, cancellation, one controlled failure, and marker read/write in the working directory.
+Run the bridge against a fake ACP stdio child that deterministically supports initialize, session/new, optional session/load, session/prompt, streamed text/tool-like updates, disconnect cancellation, one controlled failure, and marker read/write in the working directory.
 
 Required proof:
 
@@ -36,13 +36,14 @@ Required proof:
 2. Observe two distinct actors and two distinct `/data/workspace` locations.
 3. Persist bridge mapping and active operation state before prompt execution.
 4. Stream updates and exactly one terminal result for each context.
-5. Reject a second concurrent prompt as busy while still accepting concurrent cancellation/control-plane requests.
-6. Treat duplicate task/message delivery idempotently.
-7. Cancel one active prompt during an active stream and emit one terminal canceled result.
+5. Reject a second concurrent prompt as a terminal busy/rejected A2A task result.
+6. Treat duplicate task/message delivery idempotently from per-operation records.
+7. Disconnect one active stream and verify ACP cancellation or child teardown plus one terminal canceled/aborted operation record.
 8. Simulate child crash and verify one terminal failure plus active-operation cleanup.
-9. Suspend/resume one actor and prove workspace continuity from `/data`.
-10. Delete one session actor and verify the peer session remains usable.
-11. Clean up all fixtures and report leaked actors/resources as failure.
+9. Run immediate back-to-back turns to surface suspend/resume races.
+10. Suspend/resume one actor and prove workspace continuity from `/data`.
+11. Delete one session actor and verify the peer session remains usable.
+12. Clean up all fixtures and report leaked actors/resources as failure.
 
 ### Codex ACP lane: credentialed / no-human when secrets are available
 
@@ -58,7 +59,7 @@ Required proof:
 
 ### Parent-Agent delegation lane: credentialed / may depend on model availability
 
-Before implementation, invoke the same SandboxAgent tool twice from one parent Agent conversation and record whether the child receives the same A2A `contextId`. After direct SandboxAgent proof passes, run a declarative coordinator Agent that references the BYO SandboxAgent as an Agent tool and delegates one task to the session-isolated Codex specialist.
+Before implementation, use an existing SandboxAgent or trivial echo BYO fixture to record child body `contextId` and lineage headers for Go and Python parent Agent paths across same-turn and cross-turn calls. Evidence should confirm the expected current behavior—Go reuses a child context per parent pod/process and Python creates a fresh child context per turn—or document deployed-build differences. After direct SandboxAgent proof passes and an explicit correlation mechanism is selected, run a declarative coordinator Agent that references the BYO SandboxAgent as an Agent tool and delegates one task to the session-isolated Codex specialist.
 
 ## Evidence / Success Signals
 
@@ -68,7 +69,7 @@ Evidence must include:
 - bridge image tag/digest, registry location, architecture, and WorkerPool pull result;
 - Codex ACP package version and source/image commit inspected;
 - safe correlation of A2A context, actor, workspace, logical ACP session, Codex thread when known, and operation IDs;
-- readiness, prompt, cancel, suspend/resume, delete, and cleanup outcomes;
+- readiness, prompt, disconnect-as-cancel, suspend/resume, delete, and cleanup outcomes;
 - proof classification for each lane: structural, fake-runtime, credentialed-Codex, or parent-Agent delegation.
 
 ## Supplementary Artifact Note

@@ -43,7 +43,7 @@ The design must record:
 
 The POC introduces a distinct A2A-facing BYO runtime image, tentatively `a2a-codex-sandbox`. It may reuse Node base stages, the pinned Codex ACP package, and hardening choices from ACP sandbox packaging, but it must run its own A2A server and cannot rely on the `acp-sandbox-codex` entrypoint.
 
-The BYO SandboxAgent manifest must use an explicit command because the Substrate ActorTemplate path copies command and args directly. The runtime must listen on port 80 and expose the agent card readiness endpoint expected by the current SandboxAgent translation path. Initial readiness means the A2A server is listening, the bridge state directory is usable, and the child executable is present; it does not require valid OpenAI credentials, successful provider authentication, a model call, or a persistent running `codex-acp` child.
+The BYO SandboxAgent manifest must use an explicit command because the Substrate ActorTemplate path copies command and args directly. The runtime must listen on port 80 and expose the agent card readiness endpoint expected by the current SandboxAgent translation path. Initial readiness means the A2A server is listening, the bridge state directory is usable, and the child executable is present; it does not require valid OpenAI credentials, successful provider authentication, a model call, or a persistent running `codex-acp` child. This matters because the current SandboxAgent readiness path probes `/.well-known/agent-card.json` on port 80 during ActorTemplate/golden snapshot creation and resume; provider-dependent readiness would make model-independent snapshots fail when credentials are intentionally absent.
 
 ### Bridge topology
 
@@ -82,7 +82,7 @@ All mutable durable state must live under `/data`, for example:
 /data/codex/
 ```
 
-The bridge must persist `contextId`, stable actor/workspace identity, current ACP session ID when available, current Codex thread ID when available, prior ACP session IDs, workspace path, last completed operation, and active operation before calling ACP. The implementation must configure Codex state ownership, such as `CODEX_HOME`, when the pinned adapter/Codex runtime supports it.
+The bridge must persist `contextId`, stable actor/workspace identity, current ACP session ID when available, current Codex thread ID when available, prior ACP session IDs, workspace path, last completed operation, and active operation before calling ACP. The implementation must configure Codex state ownership, such as `CODEX_HOME`, when the pinned adapter/Codex runtime supports it. Current repo research indicates `codex-acp` supports `session/load` and `session/resume` via Codex thread resume, and Codex stores resumable thread rollout JSONL under its home directory. The implementation must verify that behavior for the pinned version and place `CODEX_HOME` under `/data` before claiming conversational continuity.
 
 Continuity claims are separate:
 
@@ -104,28 +104,31 @@ A2A tasks/messages are turns inside that context, not independent coding session
 
 The outer A2A response must stay open until the ACP prompt reaches a terminal stop reason. The bridge SHALL NOT continue a prompt as untracked background work after returning a terminal A2A response.
 
-Before implementation, the design must pin the exact A2A protocol surface required by direct SandboxAgent chat and parent Agent-tool delegation, including whether `message/send`, `message/stream`, `tasks/get`, and `tasks/cancel` are all required or whether a narrower subset is sufficient.
+The pinned method surface is intentionally narrow. Direct SandboxAgent chat uses `message/stream`. Parent Agent-tool delegation uses non-streaming `message/send`. Page reload may attempt `tasks/resubscribe`, but current substrate session routing expects a body `contextId` and `tasks/resubscribe`, `tasks/get`, and `tasks/cancel` carry task IDs instead. Treat those control-plane methods as platform audit findings, not requirements for the first bridge.
 
-A second concurrent prompt for the same context is rejected as busy, while concurrent control-plane requests such as `tasks/cancel` must still be served during an active stream. Duplicate delivery with the same A2A task/message identifier must not create a second Codex turn; completed duplicates return or reconstruct the prior terminal result. A canceled operation emits one terminal canceled result. A child crash emits one terminal failure and clears the active operation marker safely. Completion, cancel, timeout, and crash races must synchronize on the operation record so exactly one terminal outcome is emitted.
+Platform-consistent cancellation for this POC is disconnect-as-cancel. If the outer stream disconnects or closes before a terminal ACP stop reason, the bridge treats the active operation as canceled/aborted, attempts to send ACP cancellation or tears down the child, persists exactly one terminal canceled/aborted operation record, and does not continue work in the background. The no-background rule is load-bearing: the current substrate transport suspends the session actor when the response body closes, so background work would be checkpointed or killed without a tracked terminal result.
+
+A second concurrent prompt for the same context is rejected as a terminal busy/rejected A2A task result rather than a transport-level HTTP failure. Duplicate delivery with the same A2A task/message identifier must not create a second Codex turn; completed duplicates return or reconstruct the prior terminal result from per-operation records under `/data/bridge/operations/`. A child crash emits one terminal failure and clears the active operation marker safely. Completion, disconnect, timeout, and crash races must synchronize on the operation record so exactly one terminal outcome is emitted.
 
 ### Parent-Agent context propagation gate
 
-Parent-Agent delegation is not just final acceptance. Before bridge implementation, the compatibility audit must invoke the same SandboxAgent tool twice from one parent-Agent conversation and record whether the child receives the same A2A `contextId`. If the child context is stable, the existing context-to-actor mapping is sufficient. If kagent creates a new child context per tool invocation, the bridge or caller needs an explicit delegation/session correlation mechanism before parent-Agent continuity claims can be made.
+Parent-Agent delegation is not just final acceptance. Repo research shows the current runtimes do not naturally provide the desired mapping of one parent conversation to one child coding session. The Go parent Agent path constructs the remote A2A tool once per parent pod/process and reuses one generated child context across conversations and users until restart. The Python parent Agent path rebuilds runner/tool objects per request, so repeated turns of one parent conversation receive fresh child contexts and therefore fresh actors.
+
+Both runtimes propagate lineage headers such as `x-kagent-parent-context-id` and `x-kagent-root-context-id`, but the current substrate actor routing uses the body A2A `contextId`, not those headers. Before claiming parent-Agent continuity, the implementation must choose and validate an explicit correlation mechanism: for example, derive the child body `contextId` deterministically from the parent/root context at the caller, or add controller-side correlation in a later core change. The implementation audit should still confirm the observed per-runtime behavior against the exact selected build.
 
 ### Permission policy
 
-The first POC denies ACP permission requests explicitly, emits visible A2A output, and continues or terminates according to the backend response. Full mapping to A2A input-required/HITL is deferred.
+The first POC denies ACP permission requests explicitly, emits visible A2A output, and continues or terminates according to the backend response. The bridge must implement ACP client-side handlers for the permission shapes emitted by pinned `codex-acp`—including command execution, file changes, permission-profile requests, and MCP elicitation if observed—and select the appropriate deny/cancel response for each. Full mapping to A2A input-required/HITL is deferred; Codex approval policy should be configured to minimize permission prompts where safe.
 
 ## Risks / Trade-offs
 
-- Direct stdio is simpler but diverges from the controller-side ACP gateway topology described in upstream design notes. This is intentional for the actor-local POC.
+- Direct stdio is simpler but diverges from the controller-side ACP gateway topology described in `design/EP-XXXX-acp-integration.md`. This is intentional for the actor-local POC.
 - Python likely fits the BYO runtime lane, while Go better matches eventual core integration. TypeScript may fit the ACP ecosystem but conflicts with kagent's repository guidance unless explicitly accepted.
-- Codex conversational continuity may not be available after cold boot. The POC must keep workspace continuity, bridge continuity, and conversational continuity as separate claims.
-- Registry and egress assumptions can fail even if local Kind image loading works. WorkerPool pull and outbound Codex/OpenAI connectivity must be validated explicitly.
+- Codex conversational continuity appears available for current inspected versions, but only if the pinned version still supports thread resume and `CODEX_HOME` is durable under `/data`. The POC must keep workspace continuity, bridge continuity, and conversational continuity as separate claims.
+- Registry and egress assumptions can fail even if local Kind image loading works. WorkerPool pull and outbound Codex/OpenAI connectivity must be validated explicitly. Existing session actors are also pinned to their birth ActorTemplate/image shape, so image digest bumps during validation behave like blue/green fan-out for new sessions rather than in-place upgrades; evidence should record the digest used by each actor.
 
 ## Open Questions
 
 - Which bridge language should be used for this repo-owned POC: Python for agent-runtime fit, Go for later kagent-core migration fit, or TypeScript only with an explicit exception?
-- Does pinned `codex-acp` support reloading a prior thread/session after process restart from durable state?
-- Which exact A2A protocol methods are required by direct SandboxAgent chat and parent Agent-tool delegation?
-- Does parent-Agent tool delegation preserve the same child A2A context across repeated calls in one parent conversation, or create a new child context each time?
+- Which explicit correlation mechanism should map a parent Agent conversation/root context to a child SandboxAgent body `contextId` for delegation continuity?
+- Should platform control-plane methods such as `tasks/resubscribe`, `tasks/get`, and `tasks/cancel` be made routable in a later kagent core change, or should this POC rely only on disconnect-as-cancel and fresh task results?

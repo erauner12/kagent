@@ -4,7 +4,7 @@ Codex ACP packaging is a prerequisite for this experiment, but an ACP sandbox im
 
 The key product question is whether kagent's existing one-session-to-one-actor `SandboxAgent` lifecycle can host a coding specialist that a normal Agent can delegate to while preserving session isolation, cancellation, cleanup, and reconstructable state across data-only resumes.
 
-This OpenSpec package is fork-local planning for the `kagent` repo. It does not propose that upstream kagent adopt this OpenSpec scaffolding; an upstream-facing version should be a concise EP-style design document if maintainers want that lane.
+This OpenSpec package is fork-local planning for the `kagent` repo. It does not propose that upstream kagent adopt this OpenSpec scaffolding; an upstream-facing version should be a concise EP-style design document if maintainers want that lane. This POC is an actor-local complement to, not a replacement for, the controller-side ACP bridge direction described in `design/EP-XXXX-acp-integration.md`.
 
 ## What Changes
 
