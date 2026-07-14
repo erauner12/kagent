@@ -19,6 +19,7 @@ The [Dockerfile](Dockerfile) defines:
 | `hermes` | `--target hermes` | `base` + Hermes installed via pip (`hermes-agent[acp]`). Child command: `hermes acp`. |
 | `openclaw` | `--target openclaw` | `node-base` + the OpenClaw CLI (`npm install -g openclaw`). Runs a sandbox-local `openclaw gateway` alongside the shim via a small launcher. |
 | `claude` | `--target claude` | `node-base` + the Claude Agent ACP adapter (`npm install -g @agentclientprotocol/claude-agent-acp`, wrapping `@anthropic-ai/claude-agent-sdk`). Child command: `claude-agent-acp`. No gateway — `claude-agent-acp` communicates with the shim over stdio; the shim still exposes `ws://0.0.0.0:9000/acp` externally. Requires `ANTHROPIC_API_KEY` at runtime. |
+| `codex` | `--target codex` | `node-base` + the Codex ACP adapter (`npm install -g @agentclientprotocol/codex-acp`). Child command: `codex-acp`. No gateway — `codex-acp` communicates with the shim over stdio. Requires `OPENAI_API_KEY` or `CODEX_API_KEY`, plus `NO_BROWSER=1`, at runtime. |
 
 The base↔agent contract is intentionally tiny:
 
@@ -46,6 +47,7 @@ docker build -f docker/acp-sandbox/Dockerfile --target base     -t kagent/acp-sa
 docker build -f docker/acp-sandbox/Dockerfile --target hermes   -t kagent/acp-sandbox-hermes   go/
 docker build -f docker/acp-sandbox/Dockerfile --target openclaw -t kagent/acp-sandbox-openclaw go/
 docker build -f docker/acp-sandbox/Dockerfile --target claude   -t kagent/acp-sandbox-claude   go/
+docker build -f docker/acp-sandbox/Dockerfile --target codex    -t kagent/acp-sandbox-codex    go/
 ```
 
 ## Smoke test (no cluster needed)
@@ -71,7 +73,16 @@ websocat ws://localhost:9000/acp
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
 ```
 
-> **Note:** A successful `initialize` response only verifies the ACP transport layer. It does not confirm that prompts reach the model — see the Claude open item in [Open items](#open-items-tracked-in-the-ep) below.
+The `codex` target needs an OpenAI API key and browser-based authentication disabled in the sandbox. Pass either `OPENAI_API_KEY` or `CODEX_API_KEY` from the runtime environment, together with `NO_BROWSER=1`:
+
+```sh
+docker run --rm -p 9000:9000 -e OPENAI_API_KEY -e NO_BROWSER=1 kagent/acp-sandbox-codex
+# Use `-e CODEX_API_KEY` instead when that variable holds the runtime key.
+```
+
+These values are runtime-only; never pass credentials as Docker build arguments or bake them into the image.
+
+> **Note:** A successful `initialize` response only verifies the ACP transport layer. It does not confirm that prompts reach the model — see the Claude and Codex open items in [Open items](#open-items-tracked-in-the-ep) below.
 
 The shim does not authenticate the WebSocket handshake; in Substrate the actor's
 ingress is its only reachable surface and the controller proxies to it.
@@ -114,3 +125,7 @@ controller. Each file's header comment has the full step-by-step; in short:
   it authenticates from `ANTHROPIC_API_KEY` with no separate `authenticate`
   step). Still to verify: a full `session/prompt` round-trip reaches the model,
   and the child's in-memory session model holds across bridge reconnects.
+- Codex target: npm metadata confirms `@agentclientprotocol/codex-acp@1.1.2`
+  publishes the `codex-acp` binary. Still to verify in this image: the ACP
+  `initialize` response and advertised authentication methods, a full
+  `session/prompt` round-trip, and session behavior across shim reconnects.
