@@ -366,6 +366,7 @@ jobs:
           - acp-sandbox-hermes
           - acp-sandbox-openclaw
           - acp-sandbox-claude
+          - acp-sandbox-codex
     runs-on: ubuntu-latest
     services:
       registry:

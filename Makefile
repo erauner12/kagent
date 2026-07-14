@@ -60,6 +60,7 @@ ACP_SANDBOX_BASE_IMAGE_NAME ?= acp-sandbox-base
 ACP_SANDBOX_HERMES_IMAGE_NAME ?= acp-sandbox-hermes
 ACP_SANDBOX_OPENCLAW_IMAGE_NAME ?= acp-sandbox-openclaw
 ACP_SANDBOX_CLAUDE_IMAGE_NAME ?= acp-sandbox-claude
+ACP_SANDBOX_CODEX_IMAGE_NAME ?= acp-sandbox-codex
 
 CONTROLLER_IMAGE_TAG ?= $(VERSION)
 UI_IMAGE_TAG ?= $(VERSION)
@@ -84,6 +85,7 @@ ACP_SANDBOX_BASE_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(ACP_SANDBOX_BASE_IMA
 ACP_SANDBOX_HERMES_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(ACP_SANDBOX_HERMES_IMAGE_NAME):$(ACP_SANDBOX_IMAGE_TAG)
 ACP_SANDBOX_OPENCLAW_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(ACP_SANDBOX_OPENCLAW_IMAGE_NAME):$(ACP_SANDBOX_IMAGE_TAG)
 ACP_SANDBOX_CLAUDE_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(ACP_SANDBOX_CLAUDE_IMAGE_NAME):$(ACP_SANDBOX_IMAGE_TAG)
+ACP_SANDBOX_CODEX_IMG ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(ACP_SANDBOX_CODEX_IMAGE_NAME):$(ACP_SANDBOX_IMAGE_TAG)
 
 #take from go/go.mod
 AWK ?= $(shell command -v gawk || command -v awk)
@@ -260,6 +262,7 @@ build-img-versions: ## Print the fully-qualified image tags for all components
 	@echo acp-sandbox-hermes=$(ACP_SANDBOX_HERMES_IMG)
 	@echo acp-sandbox-openclaw=$(ACP_SANDBOX_OPENCLAW_IMG)
 	@echo acp-sandbox-claude=$(ACP_SANDBOX_CLAUDE_IMG)
+	@echo acp-sandbox-codex=$(ACP_SANDBOX_CODEX_IMG)
 
 .PHONY: controller-manifests
 controller-manifests: ## Regenerate CRD manifests and copy them into the Helm chart
@@ -333,8 +336,8 @@ build-skills-init: buildx-create
 	$(DOCKER_PUSH) $(SKILLS_INIT_IMG)
 
 .PHONY: build-acp-sandbox
-build-acp-sandbox: ## Build and push all ACP sandbox agent images (hermes, openclaw, claude)
-build-acp-sandbox: build-acp-sandbox-hermes build-acp-sandbox-openclaw build-acp-sandbox-claude
+build-acp-sandbox: ## Build and push all ACP sandbox agent images (hermes, openclaw, claude, codex)
+build-acp-sandbox: build-acp-sandbox-hermes build-acp-sandbox-openclaw build-acp-sandbox-claude build-acp-sandbox-codex
 
 .PHONY: build-acp-sandbox-base
 build-acp-sandbox-base: ## Build and push the ACP sandbox base image (acp-shim only, no agent)
@@ -359,6 +362,12 @@ build-acp-sandbox-claude: ## Build and push the ACP sandbox Claude image
 build-acp-sandbox-claude: buildx-create
 	$(DOCKER_BUILDER) $(DOCKER_BUILD_ARGS) $(TOOLS_IMAGE_BUILD_ARGS) --target claude -t $(ACP_SANDBOX_CLAUDE_IMG) -f docker/acp-sandbox/Dockerfile ./go
 	$(DOCKER_PUSH) $(ACP_SANDBOX_CLAUDE_IMG)
+
+.PHONY: build-acp-sandbox-codex
+build-acp-sandbox-codex: ## Build and push the ACP sandbox Codex image
+build-acp-sandbox-codex: buildx-create
+	$(DOCKER_BUILDER) $(DOCKER_BUILD_ARGS) $(TOOLS_IMAGE_BUILD_ARGS) --target codex -t $(ACP_SANDBOX_CODEX_IMG) -f docker/acp-sandbox/Dockerfile ./go
+	$(DOCKER_PUSH) $(ACP_SANDBOX_CODEX_IMG)
 
 .PHONY: push
 push: ## Push all component images (controller, ui, app, ADKs)

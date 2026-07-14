@@ -11,6 +11,7 @@
 #       docker build -f docker/acp-sandbox/Dockerfile --target hermes   go/
 #       docker build -f docker/acp-sandbox/Dockerfile --target openclaw go/
 #       docker build -f docker/acp-sandbox/Dockerfile --target claude   go/
+#       docker build -f docker/acp-sandbox/Dockerfile --target codex    go/
 #
 # The contract between base and agent layers is intentionally tiny:
 #   - ENTRYPOINT is acp-shim; it serves ws://0.0.0.0:9000/acp.
@@ -151,3 +152,17 @@ USER agent
 # runtime (credential injection belongs to the harness bootstrap, not this
 # image).
 CMD ["--", "claude-agent-acp"]
+
+### Agent target: Codex — OpenAI Codex exposed over ACP via the
+### @agentclientprotocol/codex-acp adapter. Built on node-base because the
+### adapter requires Node >=22. Like claude, it needs NO sandbox-local gateway:
+### `codex-acp` is a stdio ACP server, so the shim runs it directly as its child.
+FROM node-base AS codex
+ARG CODEX_ACP_VERSION=1.1.2
+USER root
+RUN npm install -g "@agentclientprotocol/codex-acp@${CODEX_ACP_VERSION}"
+USER agent
+# Keep the stdio child long-lived across shim reconnects. Runtime callers must
+# inject OPENAI_API_KEY or CODEX_API_KEY plus NO_BROWSER=1; harness/bootstrap
+# injection is deferred and credentials are never baked into this image.
+CMD ["--", "codex-acp"]
