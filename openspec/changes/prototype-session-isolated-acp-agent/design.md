@@ -82,7 +82,7 @@ All mutable durable state must live under `/data`, for example:
 /data/codex/
 ```
 
-The bridge must persist `contextId`, stable actor/workspace identity, current ACP session ID when available, current Codex thread ID when available, prior ACP session IDs, workspace path, last completed operation, and active operation before calling ACP. The implementation must configure Codex state ownership, such as `CODEX_HOME`, when the pinned adapter/Codex runtime supports it. Current repo research indicates `codex-acp` supports `session/load` and `session/resume` via Codex thread resume, and Codex stores resumable thread rollout JSONL under its home directory. The implementation must verify that behavior for the pinned version and place `CODEX_HOME` under `/data` before claiming conversational continuity.
+The bridge must persist `contextId`, stable actor/workspace identity, current ACP session ID when available, current Codex thread ID when available, Codex rollout path when available, prior ACP session IDs, workspace path, last completed operation, and active operation before calling ACP. Persist both runtime-issued session IDs and load/resume candidate IDs with confidence states such as unavailable, candidate, and verified; mark an ID verified only after a successful `session/load` or equivalent resume. The implementation must configure Codex state ownership, such as `CODEX_HOME`, when the pinned adapter/Codex runtime supports it. Current repo research indicates `codex-acp` supports `session/load` and `session/resume` via Codex thread resume, and Codex stores resumable thread rollout JSONL under its home directory. The implementation must verify that behavior for the pinned version, persist the rollout path as a resume diagnostic/fallback when exposed, and place `CODEX_HOME` under `/data` before claiming conversational continuity.
 
 Continuity claims are separate:
 
@@ -90,7 +90,7 @@ Continuity claims are separate:
 - bridge continuity: context/session/thread mappings can be reconstructed;
 - coding-agent continuity: Codex thread/history can actually be resumed.
 
-If pinned `codex-acp` cannot reload the prior thread after restart, the POC may still pass workspace continuity but must not claim conversational continuity.
+If pinned `codex-acp` cannot reload the prior thread after restart, the POC may still pass workspace continuity but must not claim conversational continuity. If `session/load` fails with a not-found or stale-session-shaped error, the bridge should fall back to `session/new`, invalidate the stale load candidate, record the fallback in evidence, and scope any resulting claim to workspace/bridge continuity rather than conversational continuity.
 
 ### Session and operation mapping
 
@@ -102,13 +102,22 @@ one A2A contextId = one actor = one durable workspace = one logical coding sessi
 
 A2A tasks/messages are turns inside that context, not independent coding sessions. ACP session IDs and Codex thread IDs are backend mappings that may be rebound during cold-boot reconstruction; they are observed state, not the stable identity contract. The compatibility audit must verify what happens when the first A2A message lacks a `contextId`; the POC must not assume clients always supply one.
 
-The outer A2A response must stay open until the ACP prompt reaches a terminal stop reason. The bridge SHALL NOT continue a prompt as untracked background work after returning a terminal A2A response.
+The outer A2A response must stay open until the ACP `session/prompt` response settles with a terminal stop reason. Terminal status must be keyed on the prompt response, not inferred from intermediate `session/update` events. The bridge SHALL NOT continue a prompt as untracked background work after returning a terminal A2A response.
 
 The pinned method surface is intentionally narrow. Direct SandboxAgent chat uses `message/stream`. Parent Agent-tool delegation uses non-streaming `message/send`. Page reload may attempt `tasks/resubscribe`, but current substrate session routing expects a body `contextId` and `tasks/resubscribe`, `tasks/get`, and `tasks/cancel` carry task IDs instead. Treat those control-plane methods as platform audit findings, not requirements for the first bridge.
 
-Platform-consistent cancellation for this POC is disconnect-as-cancel. If the outer stream disconnects or closes before a terminal ACP stop reason, the bridge treats the active operation as canceled/aborted, attempts to send ACP cancellation or tears down the child, persists exactly one terminal canceled/aborted operation record, and does not continue work in the background. The no-background rule is load-bearing: the current substrate transport suspends the session actor when the response body closes, so background work would be checkpointed or killed without a tracked terminal result.
+Platform-consistent cancellation for this POC is disconnect-as-cancel. If the outer stream disconnects or closes before a terminal ACP stop reason, the bridge treats the active operation as canceled/aborted, attempts to send ACP cancellation or tears down the child, waits for the in-flight prompt to settle when possible, persists exactly one terminal canceled/aborted operation record, and does not continue work in the background. The no-background rule is load-bearing: the current substrate transport suspends the session actor when the response body closes, so background work would be checkpointed or killed without a tracked terminal result.
 
-A second concurrent prompt for the same context is rejected as a terminal busy/rejected A2A task result rather than a transport-level HTTP failure. Duplicate delivery with the same A2A task/message identifier must not create a second Codex turn; completed duplicates return or reconstruct the prior terminal result from per-operation records under `/data/bridge/operations/`. A child crash emits one terminal failure and clears the active operation marker safely. Completion, disconnect, timeout, and crash races must synchronize on the operation record so exactly one terminal outcome is emitted.
+A second concurrent prompt for the same context is rejected as a terminal busy/rejected A2A task result rather than a transport-level HTTP failure. Duplicate delivery with the same A2A task/message identifier must not create a second Codex turn; completed duplicates return or reconstruct the prior terminal result from per-operation records under `/data/bridge/operations/`. Because ACP does not provide an authoritative active-state snapshot comparable to first-party Codex protocols, the bridge operation ledger is the source of truth for interrupt, crash, and cold-boot reconciliation. A child crash emits one terminal failure and clears the active operation marker safely. Completion, disconnect, timeout, and crash races must synchronize on the operation record so exactly one terminal outcome is emitted; generation-counted lifecycle ownership should prevent stale teardown or stale stream handlers from completing a newer operation.
+
+
+### ACP load replay and diagnostics
+
+Some ACP providers replay prior conversation history as `session/update` notifications during `session/load`. The bridge must suppress load-replay updates from the live A2A stream for the new turn while still recording diagnostics, otherwise a cold-boot resume would re-emit old conversation events as fresh output. The fake ACP child should model replay updates during load so this behavior is tested without credentials.
+
+Bootstrap and control-plane operations such as initialize, session creation, session load, and authentication should have finite timeouts to avoid wedged child processes. The prompt itself should not use an arbitrary wall-clock timeout; it is bounded by the A2A response lifetime and disconnect-as-cancel semantics.
+
+The bridge should emit redacted diagnostics for outbound/inbound ACP JSON-RPC envelopes, child stderr, invalid JSON, unmatched response IDs, load fallback, replay suppression, and lifecycle generation transitions. Diagnostics are evidence plumbing and must not log secrets, full prompts, or workspace contents.
 
 ### Parent-Agent context propagation gate
 

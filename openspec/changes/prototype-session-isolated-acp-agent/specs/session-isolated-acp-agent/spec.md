@@ -41,18 +41,26 @@ The bridge SHALL supervise the ACP child inside the actor and SHALL use direct s
 - **THEN** ACP JSON-RPC is exchanged over the child stdin/stdout stream without requiring an actor-local WebSocket loopback
 
 ### Requirement: Durable Cold-Boot Reconstruction
-The runtime SHALL assume bridge and ACP child processes may restart between turns. Mutable state required for continuity SHALL live under `/data`.
+The runtime SHALL assume bridge and ACP child processes may restart between turns. Mutable state required for continuity SHALL live under `/data`. Backend session identifiers SHALL be persisted with confidence state so stale load candidates can be invalidated without losing workspace continuity.
 
 #### Scenario: Durable state is persisted before prompt execution
 - **WHEN** the bridge starts an ACP prompt
-- **THEN** it first persists the context identifier, ACP session identifier when available, Codex thread identifier when available, workspace path, and active operation record under `/data`
+- **THEN** it first persists the context identifier, ACP session identifier when available, Codex thread identifier when available, Codex rollout path when available, workspace path, session-ID confidence, and active operation record under `/data`
 
 #### Scenario: Resume claim is scoped by available Codex state
 - **WHEN** an actor resumes after data-only suspension
 - **THEN** validation proves workspace continuity and proves conversational continuity only if pinned Codex ACP can reload the prior thread from durable state
 
+#### Scenario: Stale load candidate falls back to new session
+- **WHEN** the bridge attempts `session/load` with a persisted candidate ID and the ACP child reports a not-found or stale-session error
+- **THEN** the bridge invalidates that candidate, records the fallback, creates a new ACP session, and does not claim conversational continuity for that resume
+
+#### Scenario: Load replay updates are suppressed from live turn output
+- **WHEN** `session/load` emits replayed `session/update` notifications before the new prompt starts
+- **THEN** the bridge records diagnostics but does not stream those replayed historical updates as fresh A2A output
+
 ### Requirement: Prompt Lifecycle and Terminal Result
-The bridge SHALL keep the outer A2A request open until the ACP prompt reaches a terminal stop reason, emit exactly one terminal A2A result, and SHALL NOT continue prompts as untracked background work after returning. For this POC, cancellation SHALL be modeled as stream disconnect or response close rather than as routable `tasks/cancel`, because current substrate session routing keys on body `contextId` and current kagent clients do not issue `tasks/cancel`.
+The bridge SHALL keep the outer A2A request open until the ACP prompt response reaches a terminal stop reason, emit exactly one terminal A2A result, and SHALL NOT continue prompts as untracked background work after returning. Terminal prompt status SHALL be keyed on the `session/prompt` response rather than inferred from intermediate updates. For this POC, cancellation SHALL be modeled as stream disconnect or response close rather than as routable `tasks/cancel`, because current substrate session routing keys on body `contextId` and current kagent clients do not issue `tasks/cancel`.
 
 #### Scenario: Terminal result precedes actor suspension
 - **WHEN** an A2A message starts an ACP prompt
@@ -74,7 +82,7 @@ The runtime SHALL pin the A2A protocol methods required by direct SandboxAgent c
 - **THEN** it records `message/stream` for direct chat, `message/send` for parent delegation, and the current platform limitation for task-id-only control-plane methods
 
 ### Requirement: Duplicate Concurrency and Failure Semantics
-The bridge SHALL allow at most one active prompt per A2A context. Concurrent prompts SHALL be rejected as terminal busy/rejected A2A task results rather than HTTP transport failures; duplicate deliveries SHALL NOT create duplicate Codex turns; disconnect cancellation and child crashes SHALL produce one terminal outcome and clear active operation state safely.
+The bridge SHALL allow at most one active prompt per A2A context. Concurrent prompts SHALL be rejected as terminal busy/rejected A2A task results rather than HTTP transport failures; duplicate deliveries SHALL NOT create duplicate Codex turns; disconnect cancellation and child crashes SHALL produce one terminal outcome and clear active operation state safely. The persisted operation ledger SHALL be the bridge source of truth for active-operation reconciliation after interrupts, crashes, and cold boots.
 
 #### Scenario: Concurrent prompt is rejected
 - **WHEN** a second prompt arrives for a context with an active operation
@@ -88,6 +96,21 @@ The bridge SHALL allow at most one active prompt per A2A context. Concurrent pro
 - **WHEN** the ACP child exits during an active prompt
 - **THEN** the bridge emits one terminal failure result and clears the active operation marker safely
 
+#### Scenario: Stale lifecycle generation cannot settle a newer operation
+- **WHEN** a stale stream handler, cancel handler, or teardown path races with a newer operation generation
+- **THEN** the stale generation cannot register a terminal outcome for the newer operation
+
+### Requirement: Diagnostics and Timeout Policy
+The bridge SHALL expose redacted diagnostics for ACP JSON-RPC traffic, child stderr, invalid JSON, unmatched response IDs, load fallback, replay suppression, and lifecycle generation transitions. Bootstrap and control-plane operations SHALL have finite timeouts; prompts SHALL be bounded by A2A stream lifetime and disconnect-as-cancel rather than an arbitrary prompt timeout.
+
+#### Scenario: Diagnostics capture protocol faults without secrets
+- **WHEN** the ACP child emits stderr, invalid JSON, or an unmatched response ID
+- **THEN** the bridge records a redacted diagnostic event without credentials, full prompts, or workspace contents
+
+#### Scenario: Bootstrap timeout is finite but prompt timeout is stream-bound
+- **WHEN** initialize, session create/load, or authentication hangs
+- **THEN** the bridge fails that control-plane operation with a bounded timeout, while active prompts remain bounded by stream disconnect or terminal prompt response
+
 ### Requirement: Permission Request Policy
 The first POC SHALL deny ACP permission requests explicitly and emit visible A2A output. The bridge SHALL implement deny/cancel handling for the permission request shapes emitted by pinned `codex-acp`, including command execution, file changes, permission-profile requests, and MCP elicitation when observed. Full mapping to A2A input-required/HITL SHALL be deferred.
 
@@ -100,7 +123,7 @@ Validation SHALL include a fake ACP stdio child lane for deterministic lifecycle
 
 #### Scenario: Fake ACP lane proves lifecycle without credentials
 - **WHEN** model-independent validation runs
-- **THEN** the same bridge drives a fake ACP child that supports initialize, session creation, prompt streaming, cancellation, one controlled failure, and workspace marker access
+- **THEN** the same bridge drives a fake ACP child that supports initialize, session creation, session/load replay, prompt streaming, cancellation settlement, one controlled failure, and workspace marker access
 
 #### Scenario: Codex ACP lane proves real adapter path
 - **WHEN** credentialed validation runs with runtime-only Codex credentials
