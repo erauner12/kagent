@@ -7,15 +7,19 @@ name = "a2a-codex-sandbox"
 version = "0.1.0"
 description = "Session-isolated A2A to ACP bridge runtime"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+  "a2a-sdk[http-server]>=0.3.23",
+]
 
 [project.scripts]
+a2a-codex-sandbox = "a2a_codex_sandbox.server:main"
 fake-acp-child = "a2a_codex_sandbox.fake_acp:main"
 
 [project.optional-dependencies]
 test = [
   "pytest>=9.1.1",
   "pytest-asyncio>=1.4.0",
+  "httpx>=0.28.1",
 ]
 
 [tool.hatch.build.targets.wheel]
