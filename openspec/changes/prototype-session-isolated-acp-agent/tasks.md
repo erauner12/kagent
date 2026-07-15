@@ -35,7 +35,7 @@
 - [x] 4.2 Add focused Python or Go unit/contract tests for identity mapping, session sequencing, terminal result uniqueness, busy rejection, disconnect/cancel races, duplicate prompt idempotence, child clean/fail exit, stale generation teardown, bootstrap/control-plane timeouts, missing credentials, and failed initialization.
 - [ ] 4.3 Complete fake ACP runtime lane acceptance.
   - [x] 4.3a Add and run Kind e2e coverage for two A2A contexts, distinct actors, isolated `/data/workspace` markers, immediate back-to-back turns, suspend/resume, session deletion, peer non-interference, and cleanup.
-  - [ ] 4.3b Verify disconnect-as-cancel in a harness that propagates client disconnect through the A2A proxy; the local port-forward run terminated the client stream, but five duplicate replays did not expose a canceled terminal record.
+  - [ ] 4.3b Verify disconnect-as-cancel in a harness with an observable end-to-end downstream disconnect. The fake runtime unit/contract path cancels and persists correctly when its iterator closes, but two local Kind runs through `kubectl port-forward` terminated the client after the first update without exposing a canceled duplicate replay; that transport is not accepted as disconnect proof.
 - [ ] 4.4 Add credentialed Codex ACP smoke coverage for runtime-only initialize/authentication, one bounded model turn, permission-deny behavior if triggered, and observed conversational-continuity limits after restart.
 - [ ] 4.5 Add parent-Agent delegation coverage after direct SandboxAgent proof passes.
 - [ ] 4.6 Capture redacted evidence for all acceptance lanes.
