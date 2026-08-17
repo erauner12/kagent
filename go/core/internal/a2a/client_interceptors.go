@@ -64,6 +64,14 @@ func (u *upstreamAuthInterceptor) Before(ctx context.Context, req *a2aclient.Req
 		if err := u.authProvider.UpstreamAuth(httpReq, session, upstreamPrincipal); err != nil {
 			return ctx, nil, err
 		}
+		effectiveUserID := session.Principal().User.ID
+		if shareContext, ok := auth.ShareContextFrom(ctx); ok {
+			effectiveUserID = shareContext.UserID
+		}
+		if effectiveUserID != "" {
+			httpReq.Header.Set("X-User-Id", effectiveUserID)
+			delete(req.ServiceParams, "x-user-id")
+		}
 	}
 	propagation.TraceContext{}.Inject(ctx, propagation.HeaderCarrier(httpReq.Header))
 	for k, values := range httpReq.Header {
