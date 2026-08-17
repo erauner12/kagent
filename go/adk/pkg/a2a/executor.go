@@ -93,7 +93,7 @@ func NewKAgentExecutor(cfg KAgentExecutorConfig) *KAgentExecutor {
 
 // UserIDCallInterceptor returns an a2asrv.CallInterceptor that extracts the
 // x-user-id HTTP header from the incoming request metadata and sets it as the
-// authenticated user on the CallContext.
+// authenticated user on the CallContext and returned context.
 func UserIDCallInterceptor() a2asrv.CallInterceptor {
 	return &userIDInterceptor{}
 }
@@ -116,7 +116,7 @@ func (u *userIDInterceptor) Before(ctx context.Context, callCtx *a2asrv.CallCont
 	}
 	// Set the authenticated user so downstream code picks up the real identity.
 	callCtx.User = a2asrv.NewAuthenticatedUser(vals[0], nil)
-	return ctx, nil, nil
+	return auth.WithUserID(ctx, vals[0]), nil, nil
 }
 
 // Execute applies kagent-specific request setup and delegates event generation

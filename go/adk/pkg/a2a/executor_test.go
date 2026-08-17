@@ -8,6 +8,7 @@ import (
 	a2atype "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 	"github.com/go-logr/logr"
+	"github.com/kagent-dev/kagent/go/adk/pkg/auth"
 	adkagent "google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/runner"
@@ -19,6 +20,54 @@ type recordingExecutor struct {
 	message       *a2atype.Message
 	cleanupCalled bool
 	events        []a2atype.Event
+}
+
+func TestUserIDCallInterceptor(t *testing.T) {
+	tests := []struct {
+		name       string
+		params     map[string][]string
+		wantUserID string
+	}{
+		{
+			name:       "propagates user to call and context",
+			params:     map[string][]string{"x-user-id": {"initiating-user"}},
+			wantUserID: "initiating-user",
+		},
+		{
+			name:   "missing user ID",
+			params: map[string][]string{},
+		},
+		{
+			name:   "empty user ID",
+			params: map[string][]string{"x-user-id": {""}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, callCtx := a2asrv.NewCallContext(context.Background(), a2asrv.NewServiceParams(tt.params))
+
+			gotCtx, state, err := UserIDCallInterceptor().Before(ctx, callCtx, &a2asrv.Request{})
+			if err != nil {
+				t.Fatalf("Before() error = %v", err)
+			}
+			if state != nil {
+				t.Fatalf("Before() state = %#v, want nil", state)
+			}
+			if got := auth.UserIDFromContext(gotCtx); got != tt.wantUserID {
+				t.Fatalf("UserIDFromContext() = %q, want %q", got, tt.wantUserID)
+			}
+			if tt.wantUserID == "" {
+				if callCtx.User != nil && (callCtx.User.Name != "" || callCtx.User.Authenticated) {
+					t.Fatalf("CallContext.User = %#v, want no authenticated identity", callCtx.User)
+				}
+				return
+			}
+			if callCtx.User == nil || callCtx.User.Name != tt.wantUserID {
+				t.Fatalf("CallContext.User = %#v, want name %q", callCtx.User, tt.wantUserID)
+			}
+		})
+	}
 }
 
 func (e *recordingExecutor) Execute(_ context.Context, reqCtx *a2asrv.ExecutorContext) iter.Seq2[a2atype.Event, error] {
