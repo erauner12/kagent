@@ -8,6 +8,7 @@ import (
 	a2atype "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 	"github.com/go-logr/logr"
+	"github.com/kagent-dev/kagent/go/adk/pkg/auth"
 	adkagent "google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/runner"
@@ -19,6 +20,23 @@ type recordingExecutor struct {
 	message       *a2atype.Message
 	cleanupCalled bool
 	events        []a2atype.Event
+}
+
+func TestUserIDCallInterceptor(t *testing.T) {
+	ctx, callCtx := a2asrv.NewCallContext(context.Background(), a2asrv.NewServiceParams(map[string][]string{
+		"x-user-id": {"initiating-user"},
+	}))
+
+	gotCtx, _, err := UserIDCallInterceptor().Before(ctx, callCtx, &a2asrv.Request{})
+	if err != nil {
+		t.Fatalf("Before() error = %v", err)
+	}
+	if callCtx.User == nil || callCtx.User.Name != "initiating-user" {
+		t.Fatalf("CallContext.User = %#v, want name %q", callCtx.User, "initiating-user")
+	}
+	if got := auth.UserIDFromContext(gotCtx); got != "initiating-user" {
+		t.Fatalf("UserIDFromContext() = %q, want %q", got, "initiating-user")
+	}
 }
 
 func (e *recordingExecutor) Execute(_ context.Context, reqCtx *a2asrv.ExecutorContext) iter.Seq2[a2atype.Event, error] {
