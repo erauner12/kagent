@@ -54,8 +54,8 @@ func NewA2AHttpMux(sandboxPathPrefix string, authenticator auth.AuthProvider, ta
 	}
 }
 
-// newTaskQueryHandler wraps the passthrough handler so ListTasks is served from
-// kagent's task store, which is the source of truth for persisted tasks.
+// newTaskQueryHandler wraps the passthrough handler so GetTask and ListTasks are
+// served from kagent's task store, which is the source of truth for persisted tasks.
 func newTaskQueryHandler(requestHandler a2asrv.RequestHandler, store TaskStore) a2asrv.RequestHandler {
 	if store == nil {
 		return requestHandler
