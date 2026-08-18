@@ -1,8 +1,8 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from a2a.types import ListTasksRequest, Task, TaskState, TaskStatus
-from a2a.types import a2a_pb2
+from a2a.server.context import ServerCallContext
+from a2a.types import ListTasksRequest, Task, TaskState, TaskStatus, a2a_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 from kagent.api.v1alpha1 import sessions_pb2
 
@@ -19,6 +19,27 @@ def _client(*tasks: Task) -> MagicMock:
         )
     )
     return client
+
+
+@pytest.mark.asyncio
+async def test_get_uses_user_from_server_call_context():
+    task = Task(
+        id="task-1",
+        context_id="ctx-1",
+        status=TaskStatus(state=TaskState.TASK_STATE_INPUT_REQUIRED),
+    )
+    client = _client()
+    client.task_service.GetTask = AsyncMock(
+        return_value=sessions_pb2.GetTaskResponse(task=a2a_pb2.Task.FromString(task.SerializeToString()))
+    )
+    store = KAgentTaskStore(client)
+    context = ServerCallContext(state={"headers": {"x-user-id": "user-1"}})
+
+    result = await store.get(task.id, context=context)
+
+    assert result is not None
+    assert result.id == task.id
+    client.call_options.assert_awaited_once_with(user_id="user-1")
 
 
 @pytest.mark.asyncio
@@ -62,4 +83,5 @@ async def test_list_filters_status_and_supports_paging():
     assert response.page_size == 1
     assert len(response.tasks) == 1
     assert response.tasks[0].id == "t-working"
+    client.call_options.assert_awaited_once_with()
     client.task_service.ListTasks.assert_awaited_once()

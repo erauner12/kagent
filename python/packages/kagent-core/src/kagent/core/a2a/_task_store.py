@@ -1,16 +1,18 @@
 import asyncio
 import logging
 from datetime import timezone
+from typing import Any
 
 import grpc
+from a2a.server.context import ServerCallContext
 from a2a.server.tasks import TaskStore
-from a2a.types import ListTasksRequest, ListTasksResponse, Task
-from a2a.types import a2a_pb2
+from a2a.types import ListTasksRequest, ListTasksResponse, Task, a2a_pb2
 from a2a.utils.constants import DEFAULT_LIST_TASKS_PAGE_SIZE
 from kagent.api.v1alpha1 import sessions_pb2
 from typing_extensions import override
 
 from .._grpc import AsyncControllerClient
+from ._context import get_call_context_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +32,19 @@ class KAgentTaskStore(TaskStore):
         # Event-based sync: track pending save operations
         self._save_events: dict[str, asyncio.Event] = {}
 
+    async def _call_options(self, context: ServerCallContext | None) -> dict[str, Any]:
+        user_id = get_call_context_user_id(context)
+        if user_id:
+            return await self.client.call_options(user_id=user_id)
+        return await self.client.call_options()
+
     @override
-    async def save(self, task: Task, context=None) -> None:
+    async def save(self, task: Task, context: ServerCallContext | None = None) -> None:
         """Save a task to KAgent.
 
         Args:
             task: The task to save
-            context: Server call context (unused, for a2a-sdk 0.3+ compatibility)
+            context: Server call context supplying the effective user, when available
 
         Raises:
             httpx.HTTPStatusError: If the API request fails
@@ -44,7 +52,7 @@ class KAgentTaskStore(TaskStore):
         encoded = a2a_pb2.Task.FromString(task.SerializeToString())
         await self.client.task_service.UpsertTask(
             sessions_pb2.UpsertTaskRequest(task=encoded),
-            **await self.client.call_options(),
+            **await self._call_options(context),
         )
 
         # Signal that save completed (event-based sync)
@@ -52,12 +60,12 @@ class KAgentTaskStore(TaskStore):
             self._save_events[task.id].set()
 
     @override
-    async def get(self, task_id: str, context=None) -> Task | None:
+    async def get(self, task_id: str, context: ServerCallContext | None = None) -> Task | None:
         """Retrieve a task from KAgent.
 
         Args:
             task_id: The ID of the task to retrieve
-            context: Server call context (unused, for a2a-sdk 0.3+ compatibility)
+            context: Server call context supplying the effective user, when available
 
         Returns:
             The task if found, None otherwise
@@ -68,7 +76,7 @@ class KAgentTaskStore(TaskStore):
         try:
             response = await self.client.task_service.GetTask(
                 sessions_pb2.GetTaskRequest(task_id=task_id),
-                **await self.client.call_options(),
+                **await self._call_options(context),
             )
         except grpc.aio.AioRpcError as error:
             if error.code() == grpc.StatusCode.NOT_FOUND:
@@ -77,7 +85,7 @@ class KAgentTaskStore(TaskStore):
         return Task.FromString(response.task.SerializeToString())
 
     @override
-    async def list(self, params: ListTasksRequest, context=None) -> ListTasksResponse:
+    async def list(self, params: ListTasksRequest, context: ServerCallContext | None = None) -> ListTasksResponse:
         """List tasks for a context (session) from KAgent."""
         page_size = params.page_size or DEFAULT_LIST_TASKS_PAGE_SIZE
         if not params.context_id:
@@ -86,7 +94,7 @@ class KAgentTaskStore(TaskStore):
         tasks: list[Task] = []
         response = await self.client.task_service.ListTasks(
             sessions_pb2.ListTasksRequest(session_id=params.context_id),
-            **await self.client.call_options(),
+            **await self._call_options(context),
         )
         for item in response.tasks:
             try:
@@ -127,19 +135,19 @@ class KAgentTaskStore(TaskStore):
         )
 
     @override
-    async def delete(self, task_id: str, context=None) -> None:
+    async def delete(self, task_id: str, context: ServerCallContext | None = None) -> None:
         """Delete a task from KAgent.
 
         Args:
             task_id: The ID of the task to delete
-            context: Server call context (unused, for a2a-sdk 0.3+ compatibility)
+            context: Server call context supplying the effective user, when available
 
         Raises:
             httpx.HTTPStatusError: If the API request fails
         """
         await self.client.task_service.DeleteTask(
             sessions_pb2.DeleteTaskRequest(task_id=task_id),
-            **await self.client.call_options(),
+            **await self._call_options(context),
         )
 
     async def wait_for_save(self, task_id: str, timeout: float = 5.0) -> None:
