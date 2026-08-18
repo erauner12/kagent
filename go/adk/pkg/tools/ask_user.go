@@ -60,9 +60,6 @@ func NewAskUserTool() (tool.Tool, error) {
 				sb.WriteString(q.Question)
 			}
 			hint := sb.String()
-			if hint == "" {
-				hint = "Questions for the user."
-			}
 
 			// Build questions slice for the pending response.
 			questionsSlice := make([]map[string]any, 0, len(in.Questions))

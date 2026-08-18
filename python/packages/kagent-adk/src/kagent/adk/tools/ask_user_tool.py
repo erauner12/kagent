@@ -97,8 +97,8 @@ class AskUserTool(BaseTool):
 
         if tool_context.tool_confirmation is None:
             # First invocation — pause execution and ask the user.
-            summary = "; ".join(q.get("question", "") for q in questions if q.get("question"))
-            tool_context.request_confirmation(hint=summary or "Questions for the user.")
+            summary = "; ".join(q["question"] for q in questions)
+            tool_context.request_confirmation(hint=summary)
             logger.debug("ask_user: requesting confirmation with %d question(s)", len(questions))
             return {"status": "pending", "questions": questions}
 

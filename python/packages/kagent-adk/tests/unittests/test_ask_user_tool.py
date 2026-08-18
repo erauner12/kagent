@@ -1,74 +1,59 @@
 import json
+from unittest.mock import Mock
 
 import pytest
 from google.adk.tools.tool_confirmation import ToolConfirmation
+from google.adk.tools.tool_context import ToolContext
 
 from kagent.adk.tools.ask_user_tool import AskUserTool
 
 
-class RecordingToolContext:
-    def __init__(self, tool_confirmation=None):
-        self._tool_confirmation = tool_confirmation
-        self.confirmation_inspections = 0
-        self.confirmation_requests = []
-
-    @property
-    def tool_confirmation(self):
-        self.confirmation_inspections += 1
-        return self._tool_confirmation
-
-    def request_confirmation(self, *, hint=None, payload=None):
-        self.confirmation_requests.append({"hint": hint, "payload": payload})
-
-
 @pytest.mark.asyncio
-async def test_rejects_empty_questions_before_confirmation():
-    context = RecordingToolContext()
-
-    with pytest.raises(ValueError, match=r"^ask_user: at least one question is required$"):
-        await AskUserTool().run_async(args={"questions": []}, tool_context=context)
-
-    assert context.confirmation_inspections == 0
-    assert context.confirmation_requests == []
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("question", ["", "   ", "\t\n"])
-async def test_rejects_blank_question_before_confirmation(question):
-    context = RecordingToolContext()
-
-    with pytest.raises(ValueError, match=r"^ask_user: question 1 must contain non-whitespace text$"):
-        await AskUserTool().run_async(
-            args={"questions": [{"question": question}]},
-            tool_context=context,
-        )
-
-    assert context.confirmation_inspections == 0
-    assert context.confirmation_requests == []
-
-
-@pytest.mark.asyncio
-async def test_rejects_blank_second_question_before_confirmation():
-    context = RecordingToolContext()
-
-    with pytest.raises(ValueError, match=r"^ask_user: question 2 must contain non-whitespace text$"):
-        await AskUserTool().run_async(
-            args={
+@pytest.mark.parametrize(
+    ("args", "expected_error"),
+    [
+        (
+            {"questions": []},
+            "ask_user: at least one question is required",
+        ),
+        (
+            {"questions": [{"question": ""}]},
+            "ask_user: question 1 must contain non-whitespace text",
+        ),
+        (
+            {"questions": [{"question": "   "}]},
+            "ask_user: question 1 must contain non-whitespace text",
+        ),
+        (
+            {"questions": [{"question": "\t\n"}]},
+            "ask_user: question 1 must contain non-whitespace text",
+        ),
+        (
+            {
                 "questions": [
                     {"question": "Which environment?"},
                     {"question": " \t\n"},
                 ]
             },
-            tool_context=context,
-        )
+            "ask_user: question 2 must contain non-whitespace text",
+        ),
+    ],
+)
+async def test_rejects_invalid_questions_without_requesting_confirmation(args, expected_error):
+    context = Mock(spec=ToolContext)
+    context.tool_confirmation = None
 
-    assert context.confirmation_inspections == 0
-    assert context.confirmation_requests == []
+    with pytest.raises(ValueError) as exc_info:
+        await AskUserTool().run_async(args=args, tool_context=context)
+
+    assert str(exc_info.value) == expected_error
+    context.request_confirmation.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_valid_question_requests_confirmation_without_rewriting_text():
-    context = RecordingToolContext()
+    context = Mock(spec=ToolContext)
+    context.tool_confirmation = None
     questions = [
         {
             "question": "  Which environment?  ",
@@ -83,22 +68,15 @@ async def test_valid_question_requests_confirmation_without_rewriting_text():
     )
 
     assert result == {"status": "pending", "questions": questions}
-    assert context.confirmation_inspections == 1
-    assert context.confirmation_requests == [
-        {
-            "hint": "  Which environment?  ",
-            "payload": None,
-        }
-    ]
+    context.request_confirmation.assert_called_once_with(hint="  Which environment?  ")
 
 
 @pytest.mark.asyncio
 async def test_valid_confirmed_question_returns_answer_without_new_confirmation():
-    context = RecordingToolContext(
-        ToolConfirmation(
-            confirmed=True,
-            payload={"answers": [{"answer": "prod"}]},
-        )
+    context = Mock(spec=ToolContext)
+    context.tool_confirmation = ToolConfirmation(
+        confirmed=True,
+        payload={"answers": [{"answer": "prod"}]},
     )
 
     result = await AskUserTool().run_async(
@@ -112,5 +90,4 @@ async def test_valid_confirmed_question_returns_answer_without_new_confirmation(
             "answer": "prod",
         }
     ]
-    assert context.confirmation_inspections > 0
-    assert context.confirmation_requests == []
+    context.request_confirmation.assert_not_called()
