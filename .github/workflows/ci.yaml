@@ -81,7 +81,10 @@ jobs:
         env:
           OPENAI_API_KEY: fake
           BUILDX_BUILDER_NAME: ${{ env.BUILDX_BUILDER_NAME }}
-          KAGENT_HELM_EXTRA_ARGS: --cleanup-on-fail=false
+          # The current Grafana image only admits loopback hosts by default.
+          KAGENT_HELM_EXTRA_ARGS: >-
+            --cleanup-on-fail=false
+            --set-string 'grafana-mcp.args[0]=--allowed-hosts=kagent-grafana-mcp.kagent:8000'
           DOCKER_BUILD_ARGS: >-
             --cache-from=type=gha,scope=${{ needs.setup.outputs.cache-key }}-e2e
             --cache-from=type=gha,scope=${{ env.CACHE_KEY_PREFIX }}-main-e2e
@@ -120,6 +123,7 @@ jobs:
           OPENAI_API_KEY: fake
           KAGENT_HELM_EXTRA_ARGS: >-
             --set 'rbac.namespaces={kagent}'
+            --set-string 'grafana-mcp.args[0]=--allowed-hosts=kagent-grafana-mcp.kagent:8000'
         run: |
           # Upgrade helm to use namespace-scoped RBAC
           make helm-install-provider
@@ -144,6 +148,9 @@ jobs:
           echo "::error::Kubectl get events -n kagent"
           kubectl get events -n kagent
           echo "::error::Kubectl get agents -n kagent"
+          kubectl get agents -n kagent -o json | jq '.items[] | {name: .metadata.name, conditions: .status.conditions}' || true
+          kubectl logs -n kagent deployment/kebab-agent --tail=100 || true
+          kubectl logs -n kagent deployment/kagent-grafana-mcp --tail=100 || true
           echo "::error::Kubectl logs -n kagent deployment/kagent-controller"
           kubectl logs -n kagent deployment/kagent-controller
 
