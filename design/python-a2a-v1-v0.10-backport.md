@@ -13,8 +13,10 @@ The shared Python SDK changes from A2A SDK 0.3.26 to 1.1.2. Its message, part,
 task, status and card types change from Pydantic models to protobuf messages.
 The Python servers and remote-agent client use native A2A 1.0 routes and types;
 there is no automatic protocol fallback. Existing 0.3 Python-runtime callers
-must migrate alongside the runtime. The controller's existing compatibility
-routes are unchanged; using them with this runtime remains an integration gate.
+must migrate alongside the runtime. The controller's existing public compatibility
+routes are unchanged. Its outbound client now selects the runtime's declared wire
+version; the production controller's unconditional 0.3 selection is not compatible
+with a 1.0-only Python image.
 
 ADK, core, CrewAI, LangGraph and OpenAI share the SDK and workspace lock. Their
 converters, request handlers, samples and affected tests therefore move together.
@@ -22,8 +24,9 @@ Preview package versions distinguish the changed API from existing releases;
 consumers require the matching preview core. No packages or images are published.
 
 Google ADK stays at the release's locked 1.38.0, with its existing flat
-`AgentConfig`, skills/SRT implementation and session services. This change adds
-no controller, Go-runtime, chart, CRD, UI, database or Substrate changes. Local
+`AgentConfig`, skills/SRT implementation and session services. Beyond the narrow
+controller-to-runtime selection below, this change adds no Go-runtime, chart, CRD,
+UI, database or Substrate changes. Local
 execution continues to use `KAgentApp.build(local=True)` and in-memory stores.
 This backport does not add a new local CLI mode or reusable configuration export.
 
@@ -43,6 +46,27 @@ This backport does not add a new local CLI mode or reusable configuration export
 These are separate from the upstream protobuf conversion, and need particular
 review. They are not a replacement protocol implementation.
 
+## Controller-to-runtime selection
+
+The retained E2E `invoke_agent` request exposed the controller forcing
+`message/send` on a Python server that only accepts `SendMessage`. The fork's
+registrar now uses 1.0 for declarative Python and retains 0.3 for Go. Unknown BYO
+images retain the existing 0.3 default; converted Python BYO manifests explicitly
+declare their native protocol:
+
+```yaml
+metadata:
+  annotations:
+    kagent.dev/a2a-protocol-version: "1.0"
+```
+
+The same annotation can explicitly select `"0.3"` for a custom legacy runtime.
+Unsupported values refuse registration. Changing this annotation refreshes the
+cached client even when the Agent generation is unchanged. Selection happens
+before invocation; method errors never cause a retry using another protocol.
+The existing SDK transports, authentication, public controller routes, database
+representations and task callbacks are retained.
+
 ## Validation and merge gates
 
 The added deterministic tests exercise the real Python FastAPI application and
@@ -54,18 +78,19 @@ remain. Controller card golden outputs are read without changing their bytes.
 
 Before adopting an image, the outstanding gates are:
 
-1. Build the exact runtime image and run it with the unchanged release controller
-   and database: invocation/proxy routing, user ownership, task persistence,
+1. Build the exact runtime and fork controller with this selection change, retaining
+   the release database: invocation/proxy routing, user ownership, task persistence,
    history, restart and clarification. HTTP mocks do not establish this pairing.
+   Standalone evaluation uses only the runtime image; it does not deploy this
+   controller or demonstrate compatibility with an unchanged production controller.
 2. Qualify real MCP execution, executable skills/SRT, telemetry and retained
    evidence with that image, in managed and local arrangements as applicable.
 3. Exercise cancellation, disconnected streams and shutdown. The executor's
    existing unsupported `CancelTask` behavior is not fixed by this backport.
 4. Exercise native requests and shutdown for the other Python frameworks; their
    package unit tests are not an end-to-end runtime qualification.
-5. Decide whether upstream accepts this breaking feature on a maintenance line
-   before proposing it there. Agreement on the 1.x implementation is not
-   agreement on a 0.10 backport.
+5. Obtain upstream agreement before proposing this breaking feature on a maintenance
+   line. This is independent of a reviewed fork-only adoption.
 
 The conservative alternative is to retain the native 0.3 Python integration
 until a coordinated runtime/controller upgrade. A standalone newer runtime is

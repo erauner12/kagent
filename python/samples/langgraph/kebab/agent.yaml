@@ -1,6 +1,8 @@
 apiVersion: kagent.dev/v1alpha2
 kind: Agent
 metadata:
+  annotations:
+    kagent.dev/a2a-protocol-version: "1.0"
   name: langgraph-kebab
 spec:
   description: LangGraph kebab sample (fake make_kebab tool; use with mock LLM in E2E).

@@ -123,8 +123,8 @@ func (a *A2ARegistrar) registerAgentInformer(ctx context.Context, prototype v1al
 			if !ok1 || !ok2 {
 				return
 			}
-			specChanged := oldAgent.GetGeneration() != newAgent.GetGeneration() || !sameAgentSpec(oldAgent, newAgent)
-			if specChanged {
+			configurationChanged := oldAgent.GetGeneration() != newAgent.GetGeneration() || !sameAgentConfiguration(oldAgent, newAgent)
+			if configurationChanged {
 				if err := a.upsertAgentHandler(ctx, newAgent, log); err != nil {
 					log.Error(err, "failed to upsert A2A handler", "agent", common.GetObjectRef(newAgent))
 					return
@@ -133,7 +133,7 @@ func (a *A2ARegistrar) registerAgentInformer(ctx context.Context, prototype v1al
 			// Also notify when readiness conditions change so subscribers don't
 			// hold stale agent lists (the resource filter uses Accepted +
 			// DeploymentReady, which are status conditions, not spec fields).
-			if specChanged || agentReadinessChanged(oldAgent, newAgent) {
+			if configurationChanged || agentReadinessChanged(oldAgent, newAgent) {
 				a.notifyAgentChange(ctx)
 			}
 		},
@@ -185,7 +185,10 @@ func isAgentReady(agent v1alpha2.AgentObject) bool {
 	return workloadReady && accepted
 }
 
-func sameAgentSpec(oldAgent, newAgent v1alpha2.AgentObject) bool {
+func sameAgentConfiguration(oldAgent, newAgent v1alpha2.AgentObject) bool {
+	if oldAgent.GetAnnotations()[v1alpha2.A2AProtocolVersionAnnotation] != newAgent.GetAnnotations()[v1alpha2.A2AProtocolVersionAnnotation] {
+		return false
+	}
 	oldSpec := oldAgent.GetAgentSpec()
 	newSpec := newAgent.GetAgentSpec()
 	switch {
@@ -196,6 +199,21 @@ func sameAgentSpec(oldAgent, newAgent v1alpha2.AgentObject) bool {
 	default:
 		return reflect.DeepEqual(oldSpec, newSpec)
 	}
+}
+
+func agentProtocolVersion(agent v1alpha2.AgentObject) (a2atype.ProtocolVersion, error) {
+	version := a2atype.ProtocolVersion(agent.GetAnnotations()[v1alpha2.A2AProtocolVersionAnnotation])
+	if version == "" {
+		version = a2av0.Version
+		if spec := agent.GetAgentSpec(); spec != nil && spec.Type == v1alpha2.AgentType_Declarative &&
+			v1alpha2.EffectiveDeclarativeRuntime(spec) == v1alpha2.DeclarativeRuntime_Python {
+			version = a2atype.Version
+		}
+	}
+	if version != a2atype.Version && version != a2av0.Version {
+		return "", fmt.Errorf("unsupported controller-to-runtime A2A protocol version %q", version)
+	}
+	return version, nil
 }
 
 func informerAgentObject(obj any) (v1alpha2.AgentObject, bool) {
@@ -215,6 +233,10 @@ func deletedInformerAgentObject(obj any) (v1alpha2.AgentObject, bool) {
 }
 
 func (a *A2ARegistrar) upsertAgentHandler(ctx context.Context, agent v1alpha2.AgentObject, log logr.Logger) error {
+	protocolVersion, err := agentProtocolVersion(agent)
+	if err != nil {
+		return fmt.Errorf("failed to select A2A protocol for %s: %w", common.GetObjectRef(agent), err)
+	}
 	agentRef := types.NamespacedName{Namespace: agent.GetNamespace(), Name: agent.GetName()}
 	card := agent_translator.GetA2AAgentCard(agent)
 
@@ -240,13 +262,12 @@ func (a *A2ARegistrar) upsertAgentHandler(ctx context.Context, agent v1alpha2.Ag
 
 	client, err := a2aclient.NewFromEndpoints(
 		ctx,
-		// TODO(0.11.0): Prefer A2A 1.0 interfaces by default once managed runtimes are v1-capable.
-		// Keep legacy fallback during rollout so old agent pods continue to serve traffic.
-		filterInterfacesByVersion(card.SupportedInterfaces, a2atype.ProtocolVersion("0.3")),
+		// Select the wire before invocation; never retry a mutating call on another protocol.
+		filterInterfacesByVersion(card.SupportedInterfaces, protocolVersion),
 		a2aclient.WithJSONRPCTransport(httpClient),
 		// TODO(0.11.0): Remove the compat transport after legacy runtimes are unsupported.
 		a2aclient.WithCompatTransport(
-			a2atype.ProtocolVersion("0.3"),
+			a2av0.Version,
 			a2atype.TransportProtocolJSONRPC,
 			// This creates a legacy JSON-RPC transport that is used to forward traffic to agents that are still on the legacy A2A wire.
 			a2aclient.TransportFactoryFn(func(_ context.Context, _ *a2atype.AgentCard, iface *a2atype.AgentInterface) (a2aclient.Transport, error) {
@@ -340,7 +361,7 @@ func cloneInterfacesWithURL(interfaces []*a2atype.AgentInterface, url string) []
 }
 
 // filterInterfacesByVersion filters the interfaces to only include the ones that match the given version.
-// Currently, this is used to select the A2A 0.3 interface for managed agents.
+// The selected version belongs to the runtime, independently of the controller's public routes.
 func filterInterfacesByVersion(interfaces []*a2atype.AgentInterface, version a2atype.ProtocolVersion) []*a2atype.AgentInterface {
 	filtered := make([]*a2atype.AgentInterface, 0, len(interfaces))
 	for _, i := range interfaces {

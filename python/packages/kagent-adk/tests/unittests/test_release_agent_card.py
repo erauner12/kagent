@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 from a2a.types import AgentSkill
 from google.protobuf.json_format import MessageToDict, ParseDict, ParseError
 
@@ -56,3 +57,14 @@ def test_sample_cards_declare_native_v1_interfaces(path):
     card = parse_agent_card(json.loads(path.read_text()))
     assert card.supported_interfaces
     assert all(item.protocol_version == "1.0" for item in card.supported_interfaces)
+
+
+@pytest.mark.parametrize(
+    "path",
+    sorted((Path(__file__).resolve().parents[5] / "python/samples").rglob("agent.yaml"))
+    + [Path(__file__).resolve().parents[5] / "go/core/test/e2e/agents/kebab/agent.yaml"],
+)
+def test_python_byo_manifests_select_native_v1_upstream(path):
+    agent = yaml.safe_load(path.read_text())
+    assert agent["spec"]["type"] == "BYO"
+    assert agent["metadata"]["annotations"]["kagent.dev/a2a-protocol-version"] == "1.0"

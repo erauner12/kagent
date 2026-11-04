@@ -762,8 +762,9 @@ func TestE2EInvokeDeclarativeAgentWithMcpServerTool(t *testing.T) {
 func generateOpenAIAgent(baseURL string) *v1alpha2.Agent {
 	return &v1alpha2.Agent{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "basic-openai-test-agent",
-			Namespace: "kagent",
+			Name:        "basic-openai-test-agent",
+			Namespace:   "kagent",
+			Annotations: map[string]string{v1alpha2.A2AProtocolVersionAnnotation: string(a2atype.Version)},
 		},
 		Spec: v1alpha2.AgentSpec{
 			Description: "A basic OpenAI agent with calculator and weather tools",
@@ -799,8 +800,9 @@ func generateOpenAIAgent(baseURL string) *v1alpha2.Agent {
 func generateLangGraphAgent(baseURL string) *v1alpha2.Agent {
 	return &v1alpha2.Agent{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "langgraph-kebab-test",
-			Namespace: "kagent",
+			Name:        "langgraph-kebab-test",
+			Namespace:   "kagent",
+			Annotations: map[string]string{v1alpha2.A2AProtocolVersionAnnotation: string(a2atype.Version)},
 		},
 		Spec: v1alpha2.AgentSpec{
 			Description: "LangGraph kebab sample for E2E testing",
@@ -836,8 +838,9 @@ func generateLangGraphAgent(baseURL string) *v1alpha2.Agent {
 func generateCrewAIAgent(baseURL string) *v1alpha2.Agent {
 	return &v1alpha2.Agent{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "poem-flow-test",
-			Namespace: "kagent",
+			Name:        "poem-flow-test",
+			Namespace:   "kagent",
+			Annotations: map[string]string{v1alpha2.A2AProtocolVersionAnnotation: string(a2atype.Version)},
 		},
 		Spec: v1alpha2.AgentSpec{
 			Description: "A flow that uses a crew to generate a poem.",
