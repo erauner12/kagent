@@ -40,7 +40,7 @@ jobs:
       - setup
     env:
       VERSION: v0.0.1-test
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -53,8 +53,13 @@ jobs:
         # See https://github.com/openai/codex/issues/14919
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-      - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          name: ${{ env.BUILDX_BUILDER_NAME }}
+          version: ${{ env.BUILDX_VERSION }}
+          use: "true"
+          driver-opts: network=host
 
       - name: Set up Helm
         uses: azure/setup-helm@v5.0.1
@@ -76,7 +81,10 @@ jobs:
         env:
           OPENAI_API_KEY: fake
           BUILDX_BUILDER_NAME: ${{ env.BUILDX_BUILDER_NAME }}
-          KAGENT_HELM_EXTRA_ARGS: --cleanup-on-fail=false
+          # The current Grafana image only admits loopback hosts by default.
+          KAGENT_HELM_EXTRA_ARGS: >-
+            --cleanup-on-fail=false
+            --set-string 'grafana-mcp.args[0]=--allowed-hosts=kagent-grafana-mcp.kagent:8000'
           DOCKER_BUILD_ARGS: >-
             --cache-from=type=gha,scope=${{ needs.setup.outputs.cache-key }}-e2e
             --cache-from=type=gha,scope=${{ env.CACHE_KEY_PREFIX }}-main-e2e
@@ -115,6 +123,7 @@ jobs:
           OPENAI_API_KEY: fake
           KAGENT_HELM_EXTRA_ARGS: >-
             --set 'rbac.namespaces={kagent}'
+            --set-string 'grafana-mcp.args[0]=--allowed-hosts=kagent-grafana-mcp.kagent:8000'
         run: |
           # Upgrade helm to use namespace-scoped RBAC
           make helm-install-provider
@@ -139,6 +148,9 @@ jobs:
           echo "::error::Kubectl get events -n kagent"
           kubectl get events -n kagent
           echo "::error::Kubectl get agents -n kagent"
+          kubectl get agents -n kagent -o json | jq '.items[] | {name: .metadata.name, conditions: .status.conditions}' || true
+          kubectl logs -n kagent deployment/kebab-agent --tail=100 || true
+          kubectl logs -n kagent deployment/kagent-grafana-mcp --tail=100 || true
           echo "::error::Kubectl logs -n kagent deployment/kagent-controller"
           kubectl logs -n kagent deployment/kagent-controller
 
@@ -168,7 +180,7 @@ jobs:
       - setup
     env:
       VERSION: v0.0.1-test
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -216,7 +228,7 @@ jobs:
       - setup
     env:
       VERSION: v0.0.1-test
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -304,7 +316,7 @@ jobs:
           helm unittest helm/tools/grafana-mcp
 
   ui-tests:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: write
@@ -362,7 +374,7 @@ jobs:
           - acp-sandbox-hermes
           - acp-sandbox-openclaw
           - acp-sandbox-claude
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     services:
       registry:
         image: registry:2
@@ -375,8 +387,13 @@ jobs:
         uses: docker/setup-qemu-action@v4
         with:
           platforms: linux/amd64,linux/arm64
-      - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          name: ${{ env.BUILDX_BUILDER_NAME }}
+          version: ${{ env.BUILDX_VERSION }}
+          use: "true"
+          driver-opts: network=host
       - name: Run make build
         env:
           BUILDX_BUILDER_NAME: ${{ env.BUILDX_BUILDER_NAME }}

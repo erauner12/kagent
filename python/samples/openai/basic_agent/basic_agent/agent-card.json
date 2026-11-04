@@ -1,20 +1,33 @@
 {
   "name": "basic-openai-agent",
   "description": "A basic OpenAI agent with calculator and weather tools",
-  "url": "localhost:8000",
   "version": "0.1.0",
   "capabilities": {
     "streaming": true
   },
-  "defaultInputModes": ["text"],
-  "defaultOutputModes": ["text"],
+  "defaultInputModes": [
+    "text"
+  ],
+  "defaultOutputModes": [
+    "text"
+  ],
   "skills": [
     {
       "id": "basic",
       "name": "Basic Assistant",
       "description": "Can perform calculations and get weather information",
-      "tags": ["calculator", "weather", "assistant"]
+      "tags": [
+        "calculator",
+        "weather",
+        "assistant"
+      ]
+    }
+  ],
+  "supportedInterfaces": [
+    {
+      "url": "localhost:8000",
+      "protocolBinding": "JSONRPC",
+      "protocolVersion": "1.0"
     }
   ]
 }
-

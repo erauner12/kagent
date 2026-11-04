@@ -1,7 +1,13 @@
 {
   "name": "kebab",
   "description": "A kebab agent",
-  "url": "localhost:8080",
+  "supportedInterfaces": [
+    {
+      "url": "http://localhost:8080",
+      "protocolBinding": "JSONRPC",
+      "protocolVersion": "1.0"
+    }
+  ],
   "version": "0.0.1",
   "capabilities": {
     "streaming": true

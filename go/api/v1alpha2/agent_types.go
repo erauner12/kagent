@@ -37,6 +37,9 @@ const (
 	AgentType_BYO         AgentType = "BYO"
 )
 
+// A2AProtocolVersionAnnotation explicitly selects the controller-to-runtime wire version.
+const A2AProtocolVersionAnnotation = "kagent.dev/a2a-protocol-version"
+
 // DeclarativeRuntime represents the runtime implementation for declarative agents
 // +kubebuilder:validation:Enum=python;go
 type DeclarativeRuntime string
