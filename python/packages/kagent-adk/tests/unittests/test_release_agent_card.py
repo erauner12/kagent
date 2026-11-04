@@ -48,7 +48,9 @@ def test_unknown_card_fields_still_refuse():
 
 
 @pytest.mark.parametrize(
-    "path", sorted((Path(__file__).resolve().parents[5] / "python/samples").rglob("agent-card.json"))
+    "path",
+    sorted((Path(__file__).resolve().parents[5] / "python/samples").rglob("agent-card.json"))
+    + sorted((Path(__file__).resolve().parents[5] / "go/core/test/e2e/agents").rglob("agent-card.json")),
 )
 def test_sample_cards_declare_native_v1_interfaces(path):
     card = parse_agent_card(json.loads(path.read_text()))
