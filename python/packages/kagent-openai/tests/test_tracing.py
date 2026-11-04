@@ -99,7 +99,9 @@ def test_build_drops_native_exporter_even_if_configure_tracing_fails(monkeypatch
         "name": "test",
         "description": "test agent",
         "version": "0.0.1",
-        "url": "http://localhost:8080",
+        "supportedInterfaces": [
+            {"url": "http://localhost:8080", "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+        ],
         "capabilities": {"streaming": True},
         "defaultInputModes": ["text/plain"],
         "defaultOutputModes": ["text/plain"],

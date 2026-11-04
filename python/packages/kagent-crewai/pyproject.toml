@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kagent-crewai"
-version = "0.1.0"
+version = "0.2.0.dev0"
 description = "CrewAI integration for KAgent with A2A server support"
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
@@ -15,8 +15,8 @@ dependencies = [
   "pydantic>=2.0.0",
   "typing-extensions>=4.16.0",
   "uvicorn>=0.20.0",
-  "a2a-sdk[http-server]>=0.3.26",
-  "kagent-core>=0.1.0",
+  "a2a-sdk[http-server]>=1.1.0,<2",
+  "kagent-core>=0.2.0.dev0,<0.3",
   "opentelemetry-instrumentation-crewai>=0.47.3",
   "google-genai>=1.21.1"
 ]

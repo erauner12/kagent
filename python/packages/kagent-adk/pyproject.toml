@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kagent-adk"
-version = "0.3.0"
+version = "0.4.0.dev0"
 description = "kagent-adk is an sdk for integrating adk agents with kagent"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "agentsts-adk>=0.1.0",
   "agentsts-core>=0.1.0",
-  "kagent-core>=0.1.0",
+  "kagent-core>=0.2.0.dev0,<0.3",
   "kagent-skills>=0.1.0",
   "aiofiles>=24.1.0",
   "anyio>=4.14.2",
@@ -29,7 +29,7 @@ dependencies = [
   "pydantic>=2.5.0",
   "typing-extensions>=4.16.0",
   "jsonref>=1.1.0",
-  "a2a-sdk>=0.3.23",
+  "a2a-sdk>=1.1.0,<2",
   # Security: pin minimum versions for CVE fixes in transitive dependencies
   "urllib3>=2.6.3",  # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441: unbounded decompression DoS
   "filelock>=3.20.3",  # CVE-2025-68146, CVE-2026-22701: TOCTOU symlink race condition

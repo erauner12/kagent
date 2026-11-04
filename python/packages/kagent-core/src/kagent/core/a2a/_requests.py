@@ -3,8 +3,9 @@ import logging
 from a2a.auth.user import User
 from a2a.server.agent_execution import RequestContext, SimpleRequestContextBuilder
 from a2a.server.context import ServerCallContext
+from a2a.server.routes.common import DefaultServerCallContextBuilder
 from a2a.server.tasks import TaskStore
-from a2a.types import MessageSendParams, Task
+from a2a.types import SendMessageRequest, Task
 
 from ._context import get_call_context_user_id, set_request_user_id
 
@@ -27,6 +28,14 @@ class KAgentUser(User):
         return self.user_id
 
 
+class KAgentServerCallContextBuilder(DefaultServerCallContextBuilder):
+    def build_user(self, request):
+        # SDK 1.x reads task ownership before calling RequestContextBuilder.
+        if user_id := request.headers.get("x-user-id"):
+            return KAgentUser(user_id)
+        return super().build_user(request)
+
+
 class KAgentRequestContextBuilder(SimpleRequestContextBuilder):
     """
     A request context builder that will be used to hack in the user_id for now.
@@ -37,11 +46,11 @@ class KAgentRequestContextBuilder(SimpleRequestContextBuilder):
 
     async def build(
         self,
-        params: MessageSendParams | None = None,
+        context: ServerCallContext,
+        params: SendMessageRequest | None = None,
         task_id: str | None = None,
         context_id: str | None = None,
         task: Task | None = None,
-        context: ServerCallContext | None = None,
     ) -> RequestContext:
         user_id = get_call_context_user_id(context)
         set_request_user_id(user_id)
@@ -55,5 +64,11 @@ class KAgentRequestContextBuilder(SimpleRequestContextBuilder):
             source = headers.get("x-kagent-source", None)
             if source:
                 context.state["kagent_source"] = source
-        request_context = await super().build(params, task_id, context_id, task, context)
+        request_context = await super().build(
+            context=context,
+            params=params,
+            task_id=task_id,
+            context_id=context_id,
+            task=task,
+        )
         return request_context

@@ -1,19 +1,32 @@
 {
   "name": "currency-converter",
   "description": "A currency converter LangGraph agent that can convert currencies",
-  "url": "localhost:8080",
   "version": "0.1.0",
   "capabilities": {
     "streaming": true
   },
-  "defaultInputModes": ["text"],
-  "defaultOutputModes": ["text"],
+  "defaultInputModes": [
+    "text"
+  ],
+  "defaultOutputModes": [
+    "text"
+  ],
   "skills": [
     {
       "id": "currency-converter",
       "name": "Currency Converter",
       "description": "Can convert currencies",
-      "tags": ["currency", "conversion"]
+      "tags": [
+        "currency",
+        "conversion"
+      ]
+    }
+  ],
+  "supportedInterfaces": [
+    {
+      "url": "localhost:8080",
+      "protocolBinding": "JSONRPC",
+      "protocolVersion": "1.0"
     }
   ]
 }
